@@ -1,51 +1,36 @@
+"use client"
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
+// Interfaz actualizada para coincidir con los datos que recibe
 interface Product {
-  id: number
-  name?: string
-  price?: number
+  nombre: string
+  total?: number
   sales_count?: number
   image_url?: string
 }
 
 export function PopularProducts({ products }: { products: Product[] }) {
-  // If no products provided, use mock data
-  const displayProducts = products.length
-    ? products
-    : [
-        { id: 1, name: "Café Latte", price: 150, sales_count: 128, image_url: "/placeholder.svg?height=40&width=40" },
-        { id: 2, name: "Cappuccino", price: 150, sales_count: 96, image_url: "/placeholder.svg?height=40&width=40" },
-        {
-          id: 3,
-          name: "Café Americano",
-          price: 120,
-          sales_count: 84,
-          image_url: "/placeholder.svg?height=40&width=40",
-        },
-        { id: 4, name: "Mocha", price: 170, sales_count: 72, image_url: "/placeholder.svg?height=40&width=40" },
-        {
-          id: 5,
-          name: "Frappuccino de Caramelo",
-          price: 180,
-          sales_count: 65,
-          image_url: "/placeholder.svg?height=40&width=40",
-        },
-      ]
+  if (!products || products.length === 0) {
+      return <div className="text-center text-sm text-gray-500 py-4">No hay productos populares este mes.</div>
+  }
 
   return (
     <div className="space-y-4">
-      {displayProducts.map((product) => (
-        <div key={product.id} className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
+      {products.map((product) => (
+        // CORRECCIÓN: Se usa "product.nombre" como key, que es único en esta lista.
+        <div key={product.nombre} className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
           <div className="flex items-center space-x-3">
             <Avatar className="h-9 w-9">
-              <AvatarImage src={product.image_url || "/placeholder.svg"} alt={product.name} />
+              <AvatarImage src={product.image_url || "/placeholder.svg"} alt={product.nombre} />
               <AvatarFallback className="bg-amber-200 text-amber-800">
-                {product.name?.substring(0, 2) || "CA"}
+                {product.nombre?.substring(0, 2) || "CA"}
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-sm font-medium">{product.name}</p>
-              <p className="text-xs text-gray-500">₱{product.price}</p>
+              <p className="text-sm font-medium">{product.nombre}</p>
+              {/* Mostramos el total de ventas del producto en el período */}
+              <p className="text-xs text-gray-500">${(product.total || 0).toFixed(2)}</p>
             </div>
           </div>
           <div>
