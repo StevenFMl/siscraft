@@ -128,59 +128,59 @@ export async function eliminarProducto(id: string | number) {
   const supabase = createClient()
 
   try {
-    // Primero obtenemos el producto para saber la ruta de la imagen
-    const { data: producto, error: errorConsulta } = await (await supabase)
-      .from("productos")
-      .select("imagen_url")
-      .eq("id", id)
-      .single()
+    // PASO 1: Encontrar todas las órdenes que contienen este producto.
+    const { data: detalles, error: detallesError } = await (await supabase)
+      .from("detalles_orden")
+      .select("orden_id")
+      .eq("producto_id", id);
 
-    if (errorConsulta) {
-      console.error("Error al consultar el producto:", errorConsulta)
-      throw new Error(errorConsulta.message)
+    if (detallesError) {
+      console.error("Error al buscar el producto en las órdenes:", detallesError);
+      throw new Error("Error al verificar las órdenes.");
     }
+    
+    const ordenesIds = detalles.map(d => d.orden_id);
 
-    // Si el producto tiene una imagen, la eliminamos del storage
-    if (producto?.imagen_url) {
-      try {
-        // Extraemos la ruta del archivo de la URL pública
-        const urlPartes = producto.imagen_url.split("productos-imagenes/")
-        if (urlPartes.length > 1) {
-          const filePath = urlPartes[1]
+    if (ordenesIds.length > 0) {
+      // PASO 2: De esas órdenes, verificar si alguna está en estado 'pendiente' o 'preparando'.
+      const { data: ordenesActivas, error: ordenesError } = await (await supabase)
+        .from("ordenes")
+        .select("id")
+        .in("id", ordenesIds)
+        .in("estado", ["pendiente", "preparando"])
+        .limit(1); // Solo necesitamos saber si existe al menos una.
 
-          // Eliminamos el archivo del storage
-          const { error: errorStorage } = await (await supabase).storage.from("productos-imagenes").remove([filePath])
+      if (ordenesError) {
+        console.error("Error al verificar el estado de las órdenes:", ordenesError);
+        throw new Error("Error al verificar el estado de las órdenes.");
+      }
 
-          if (errorStorage) {
-            console.error("Error al eliminar la imagen del storage:", errorStorage)
-            // Continuamos con la eliminación del producto aunque falle la eliminación de la imagen
-          }
-        }
-      } catch (errorImagen) {
-        console.error("Error al procesar la eliminación de la imagen:", errorImagen)
-        // Continuamos con la eliminación del producto aunque falle la eliminación de la imagen
+      // Si se encuentra una orden activa, lanzamos el error con el ID correcto.
+      if (ordenesActivas && ordenesActivas.length > 0) {
+        throw new Error(`Este producto no puede ser eliminado porque está en una orden activa (ID: ${ordenesActivas[0].id}). Completa o cancela la orden primero.`);
       }
     }
 
-    // Eliminamos el producto de la base de datos
-    const { error } = await (await supabase).from("productos").delete().eq("id", id)
+    // Si llegamos aquí, el producto no está en ninguna orden activa. Procedemos a descontinuarlo.
+    const { error } = await (await supabase)
+      .from("productos")
+      .update({ estado: 'descontinuado' })
+      .eq("id", id);
 
     if (error) {
-      console.error("Error al eliminar el producto:", error)
-      throw new Error(error.message)
+      console.error("Error al descontinuar el producto:", error);
+      throw new Error(error.message);
     }
 
-    // Revalidamos todas las rutas
     revalidatePath("/dashboard/productos")
     revalidatePath("/dashboard/catalogo")
-    revalidatePath("/dashboard/precios")
     revalidatePath("/dashboard")
-    revalidatePath("/")
 
-    return { success: true, message: "Producto eliminado correctamente" }
-  } catch (error) {
-    console.error("Error inesperado:", error)
-    throw error
+    return { success: true, message: "El producto ha sido marcado como descontinuado." };
+
+  } catch (error: any) {
+    console.error("Error inesperado al descontinuar producto:", error);
+    throw error;
   }
 }
 
@@ -197,6 +197,7 @@ export async function obtenerProductosConCategorias() {
           nombre
         )
       `)
+      .neq('estado', 'descontinuado') 
       .order("nombre")
 
     if (error) {
