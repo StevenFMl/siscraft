@@ -10,8 +10,6 @@ import { Coffee, Download, Printer, AlertTriangle } from "lucide-react"
 import { obtenerFacturaPorId, anularFactura } from "../facturas/facturas-actions" // Ajusta la ruta si es necesario
 import { toast } from "sonner"
 
-// --- Interfaces (Deberían ser las mismas que en tus actions de facturas y órdenes) ---
-// Define la estructura de tu factura tal como la devuelve `obtenerFacturaPorId`
 interface ProductoDetalleOrden {
     id: number;
     nombre: string;

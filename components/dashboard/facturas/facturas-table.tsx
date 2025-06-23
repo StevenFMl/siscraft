@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Pencil, FileText, Ban } from "lucide-react"
+import { MoreHorizontal, FileText, Ban } from "lucide-react"
 import { anularFactura } from "../facturas/facturas-actions"
 import {
   AlertDialog,
@@ -35,10 +35,9 @@ interface Factura {
 interface FacturasTableProps {
   facturas: Factura[]
   onViewFactura: (factura: Factura) => void
-  onEditFactura: (factura: Factura) => void
 }
 
-export function FacturasTable({ facturas, onViewFactura, onEditFactura }: FacturasTableProps) {
+export function FacturasTable({ facturas, onViewFactura }: FacturasTableProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [isAnularDialogOpen, setIsAnularDialogOpen] = useState(false)
   const [facturaToAnular, setFacturaToAnular] = useState<number | null>(null)
@@ -129,19 +128,13 @@ export function FacturasTable({ facturas, onViewFactura, onEditFactura }: Factur
                         <span>Ver</span>
                       </DropdownMenuItem>
                       {factura.estado !== "anulada" && (
-                        <>
-                          <DropdownMenuItem className="flex items-center" onClick={() => onEditFactura(factura)}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            <span>Editar</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="flex items-center text-red-600"
-                            onClick={() => handleAnular(factura.id)}
-                          >
-                            <Ban className="mr-2 h-4 w-4" />
-                            <span>Anular</span>
-                          </DropdownMenuItem>
-                        </>
+                        <DropdownMenuItem
+                          className="flex items-center text-red-600"
+                          onClick={() => handleAnular(factura.id)}
+                        >
+                          <Ban className="mr-2 h-4 w-4" />
+                          <span>Anular</span>
+                        </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>

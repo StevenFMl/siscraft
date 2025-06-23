@@ -10,6 +10,7 @@ import { RefreshCw, Search, FileText } from "lucide-react"
 import { FacturasTable } from "./facturas-table"
 import { obtenerFacturas } from "./facturas-actions"
 import { toast } from "sonner"
+import FacturaViewModal from "./factura-view-modal"
 
 interface Factura {
   id: number
@@ -34,6 +35,8 @@ export default function FacturasPage() {
   const [activeTab, setActiveTab] = useState("todas")
   const [filtroCliente, setFiltroCliente] = useState("todos")
   const [clientes, setClientes] = useState<{ id: string; nombre: string }[]>([])
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [selectedFacturaId, setSelectedFacturaId] = useState<number | null>(null)
 
   // Cargar facturas al montar el componente
   useEffect(() => {
@@ -87,6 +90,20 @@ export default function FacturasPage() {
     return matchesTab && matchesSearch && matchesCliente
   })
 
+  const handleViewFactura = (factura: Factura) => {
+    setSelectedFacturaId(factura.id)
+    setIsViewModalOpen(true)
+  }
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false)
+    setSelectedFacturaId(null)
+  }
+
+  const handleFacturaAnulada = () => {
+    loadFacturas()
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -103,32 +120,6 @@ export default function FacturasPage() {
         </Button>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Input
-            placeholder="Buscar por número, cliente o orden..."
-            className="border-amber-200 pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        </div>
-        <div className="w-full md:w-48">
-          <Select value={filtroCliente} onValueChange={setFiltroCliente}>
-            <SelectTrigger className="border-amber-200">
-              <SelectValue placeholder="Cliente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos los clientes</SelectItem>
-              {clientes.map((cliente) => (
-                <SelectItem key={cliente.id} value={cliente.id}>
-                  {cliente.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-4 flex flex-wrap">
@@ -152,11 +143,18 @@ export default function FacturasPage() {
                 <p>Cargando facturas...</p>
               </div>
             ) : (
-              <FacturasTable facturas={filteredFacturas} onRefresh={loadFacturas} />
+              <FacturasTable facturas={filteredFacturas} onViewFactura={handleViewFactura} />
             )}
           </CardContent>
         </Card>
       </Tabs>
+
+      <FacturaViewModal
+        isOpen={isViewModalOpen}
+        onClose={handleCloseViewModal}
+        facturaId={selectedFacturaId}
+        onAnular={handleFacturaAnulada}
+      />
     </div>
   )
 }
