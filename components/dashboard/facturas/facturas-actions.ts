@@ -1,0 +1,196 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { createClient } from "@/utils/supabase/server"
+
+interface DatosFacturacion {
+  razon_social?: string
+  nit?: string
+  direccion?: string
+  telefono?: string
+  email?: string
+  nombre_contacto?: string
+}
+
+interface FacturaData {
+  id?: number
+  numero_factura?: string
+  orden_id: number
+  fecha_emision?: string
+  subtotal: number
+  impuestos: number
+  total: number
+  estado?: string
+  datos_facturacion?: DatosFacturacion
+  notas?: string
+  id_cliente: string
+}
+
+export async function crearFactura(data: FacturaData) {
+  try {
+    console.log("Creando factura con datos:", JSON.stringify(data, null, 2))
+
+    const supabase = await createClient()
+
+    // Generar número de factura si no se proporciona
+    if (!data.numero_factura) {
+      // Obtener el último número de factura
+      const { data: ultimaFactura, error: errorUltimaFactura } = await supabase
+        .from("facturas")
+        .select("numero_factura")
+        .order("id", { ascending: false })
+        .limit(1)
+        .single()
+
+      let nuevoNumero = 1
+      if (!errorUltimaFactura && ultimaFactura && ultimaFactura.numero_factura) {
+        // Extraer el número y aumentarlo en 1
+        const ultimoNumero = Number.parseInt(ultimaFactura.numero_factura.replace(/\D/g, ""))
+        if (!isNaN(ultimoNumero)) {
+          nuevoNumero = ultimoNumero + 1
+        }
+      }
+
+      // Formatear el nuevo número con ceros a la izquierda
+      data.numero_factura = `F-${nuevoNumero.toString().padStart(6, "0")}`
+    }
+
+    // Establecer fecha de emisión si no se proporciona
+    if (!data.fecha_emision) {
+      data.fecha_emision = new Date().toISOString()
+    }
+
+    // Establecer estado por defecto
+    if (!data.estado) {
+      data.estado = "emitida"
+    }
+
+    // Insertar la factura en la base de datos
+    const { data: facturaCreada, error: facturaError } = await supabase.from("facturas").insert([data]).select()
+
+    if (facturaError) {
+      console.error("Error al crear la factura:", facturaError)
+      throw new Error(facturaError.message || "Error al crear la factura")
+    }
+
+    if (!facturaCreada || facturaCreada.length === 0) {
+      console.error("No se recibieron datos de la factura creada")
+      throw new Error("No se pudo crear la factura")
+    }
+
+    console.log("Factura creada:", facturaCreada[0])
+
+    // Actualizar el estado de la orden a "facturada"
+    const { error: ordenError } = await supabase
+      .from("ordenes")
+      .update({ estado_facturacion: "facturada" })
+      .eq("id", data.orden_id)
+
+    if (ordenError) {
+      console.error("Error al actualizar el estado de la orden:", ordenError)
+      // No lanzamos error para no interrumpir el flujo principal
+    }
+
+    revalidatePath("/dashboard/facturas")
+    revalidatePath("/dashboard/ordenes")
+    return { success: true, facturaId: facturaCreada[0].id, numeroFactura: facturaCreada[0].numero_factura }
+  } catch (error) {
+    console.error("Error inesperado:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Error desconocido" }
+  }
+}
+
+export async function obtenerFacturas() {
+  try {
+    const supabase = await createClient()
+
+    // Obtener facturas con join a clientes y órdenes
+    const { data, error } = await supabase
+      .from("facturas")
+      .select(`
+        *,
+        clientes(id, nombre, apellido, email, telefono),
+        ordenes(id, fecha_orden, estado)
+      `)
+      .order("fecha_emision", { ascending: false })
+
+    if (error) {
+      console.error("Error al obtener facturas:", error)
+      throw error
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error inesperado al obtener facturas:", error)
+    return []
+  }
+}
+
+export async function obtenerFacturaPorId(id: number) {
+  try {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from("facturas")
+      .select(`
+        *,
+        clientes(id, nombre, apellido, email, telefono, direccion, ciudad, codigo_postal),
+        ordenes(id, fecha_orden, estado, detalles_orden(
+          id, producto_id, cantidad, precio_unitario, subtotal, notas,
+          productos(id, nombre, precio, imagen_url)
+        ))
+      `)
+      .eq("id", id)
+      .single()
+
+    if (error) {
+      console.error(`Error al obtener factura con ID ${id}:`, error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error inesperado al obtener factura:", error)
+    return null
+  }
+}
+
+export async function anularFactura(id: number) {
+  try {
+    const supabase = await createClient()
+
+    // Actualizar el estado de la factura a "anulada"
+    const { error } = await supabase.from("facturas").update({ estado: "anulada" }).eq("id", id)
+
+    if (error) {
+      console.error("Error al anular la factura:", error)
+      throw new Error(error.message)
+    }
+
+    // Obtener el ID de la orden asociada
+    const { data: factura, error: facturaError } = await supabase
+      .from("facturas")
+      .select("orden_id")
+      .eq("id", id)
+      .single()
+
+    if (!facturaError && factura) {
+      // Actualizar el estado de facturación de la orden a "no_facturada"
+      const { error: ordenError } = await supabase
+        .from("ordenes")
+        .update({ estado_facturacion: "no_facturada" })
+        .eq("id", factura.orden_id)
+
+      if (ordenError) {
+        console.error("Error al actualizar el estado de la orden:", ordenError)
+        // No lanzamos error para no interrumpir el flujo principal
+      }
+    }
+
+    revalidatePath("/dashboard/facturas")
+    return { success: true }
+  } catch (error) {
+    console.error("Error inesperado:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Error desconocido" }
+  }
+}
