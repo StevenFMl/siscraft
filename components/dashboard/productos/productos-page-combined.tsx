@@ -1,3 +1,5 @@
+// En: components/dashboard/productos/productos-page-combined.tsx
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -15,7 +17,10 @@ import { obtenerProductosConCategorias } from "../productos/productos-actions"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { toast } from "sonner"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 
+// ... (las interfaces no cambian) ...
 interface Producto {
   puntos_otorgados: number
   id: number | string
@@ -38,12 +43,7 @@ interface Categoria {
   descripcion?: string
 }
 
-// Funciones fetcher para SWR
-const fetchProductos = () => obtenerProductosConCategorias()
-const fetchCategorias = () => obtenerCategorias()
-
 export default function ProductosCombinedPage() {
-  // Estados para modales
   const [isProductoModalOpen, setIsProductoModalOpen] = useState(false)
   const [selectedProducto, setSelectedProducto] = useState<Producto | null>(null)
   const [isEditingProducto, setIsEditingProducto] = useState(false)
@@ -52,51 +52,36 @@ export default function ProductosCombinedPage() {
   const [isEditingCategoria, setIsEditingCategoria] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState("productos")
+  
+  // CAMBIO: El estado inicial del filtro ahora es 'todos'
+  const [filtroEstado, setFiltroEstado] = useState('todos');
 
   const router = useRouter()
-
-  // Usar SWR para obtener y cachear los datos
+  
   const {
     data: productos,
     error: errorProductos,
     mutate: mutateProductos,
     isLoading: isLoadingProductos,
-  } = useSWR("productos", fetchProductos, {
-    revalidateOnFocus: false,
-    revalidateOnMount: true,
-    refreshInterval: 0,
-    dedupingInterval: 2000,
-  })
+  } = useSWR(['productos', filtroEstado], () => obtenerProductosConCategorias(filtroEstado));
 
   const {
     data: categorias,
-    error: errorCategorias,
     mutate: mutateCategorias,
     isLoading: isLoadingCategorias,
-  } = useSWR("categorias", fetchCategorias, {
-    revalidateOnFocus: false,
-    revalidateOnMount: true,
-    refreshInterval: 0,
-    dedupingInterval: 2000,
-  })
+  } = useSWR("categorias", obtenerCategorias);
 
-  // Efecto para guardar categorías en localStorage para uso en ventas
   useEffect(() => {
     if (Array.isArray(categorias) && categorias.length > 0) {
       try {
-        const categoryNames = categorias
-          .map((cat) => cat.nombre)
-          .filter(Boolean)
-          .sort()
+        const categoryNames = categorias.map((cat) => cat.nombre).filter(Boolean).sort()
         localStorage.setItem("ventasCategories", JSON.stringify(categoryNames))
-        console.log("Categorías guardadas en localStorage:", categoryNames)
       } catch (error) {
         console.error("Error al guardar categorías en localStorage:", error)
       }
     }
   }, [categorias])
 
-  // Función para refrescar manualmente los datos
   const refreshData = async () => {
     setIsRefreshing(true)
     try {
@@ -110,7 +95,6 @@ export default function ProductosCombinedPage() {
     }
   }
 
-  // Handlers para productos
   const handleNewProducto = () => {
     setSelectedProducto(null)
     setIsEditingProducto(false)
@@ -124,7 +108,6 @@ export default function ProductosCombinedPage() {
     setIsProductoModalOpen(true)
   }
 
-  // Handlers para categorías
   const handleNewCategoria = () => {
     setSelectedCategoria(null)
     setIsEditingCategoria(false)
@@ -137,31 +120,21 @@ export default function ProductosCombinedPage() {
     setIsCategoriaModalOpen(true)
   }
 
-  const handleProductoSuccess = () => {
+  const handleSuccess = () => {
     mutateProductos()
-    router.refresh()
-  }
-
-  const handleCategoriaSuccess = () => {
     mutateCategorias()
-    mutateProductos() // También actualizamos productos por si cambiaron las categorías
     router.refresh()
   }
 
-  // Datos para análisis de precios
   const pricingProducts = productos
     ? productos.map((product) => ({
-        id: product.id,
-        name: product.nombre,
-        price: product.precio,
-        cost: product.costo || 0,
+        id: product.id, name: product.nombre, price: product.precio, cost: product.costo || 0,
         category: product.categoria || (product.categorias ? product.categorias.nombre : "Sin categoría"),
-        profit_margin: product.costo ? Math.round(((product.precio - product.costo) / product.precio) * 100) : 0,
+        profit_margin: product.costo ? Math.round(((product.precio - product.costo) / product.precio) * 100) : 100,
         points: product.puntos_otorgados || 0,
       }))
     : []
 
-  // Categorías únicas para el análisis de precios
   const uniqueCategories =
     pricingProducts.length > 0
       ? [...new Set(pricingProducts.map((product) => product.category))].filter(Boolean).sort()
@@ -171,13 +144,7 @@ export default function ProductosCombinedPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-amber-900">Gestión de Productos</h1>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={refreshData}
-          disabled={isRefreshing}
-          className="flex items-center gap-1"
-        >
+        <Button variant="outline" size="sm" onClick={refreshData} disabled={isRefreshing} className="flex items-center gap-1">
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
           {isRefreshing ? "Actualizando..." : "Actualizar"}
         </Button>
@@ -185,85 +152,62 @@ export default function ProductosCombinedPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-4">
-          <TabsTrigger value="productos">
-            <Package className="h-4 w-4 mr-2" />
-            Productos
-          </TabsTrigger>
-          <TabsTrigger value="categorias">
-            <Layers className="h-4 w-4 mr-2" />
-            Categorías
-          </TabsTrigger>
-          <TabsTrigger value="precios">
-            <Tag className="h-4 w-4 mr-2" />
-            Análisis de Precios
-          </TabsTrigger>
+          <TabsTrigger value="productos"><Package className="h-4 w-4 mr-2" />Productos</TabsTrigger>
+          <TabsTrigger value="categorias"><Layers className="h-4 w-4 mr-2" />Categorías</TabsTrigger>
+          <TabsTrigger value="precios"><Tag className="h-4 w-4 mr-2" />Análisis de Precios</TabsTrigger>
         </TabsList>
 
-        {/* Pestaña de Productos */}
         <TabsContent value="productos" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold text-amber-800">Lista de Productos</h2>
             <Button className="bg-amber-700 hover:bg-amber-800" onClick={handleNewProducto}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Nuevo Producto
+              <PlusCircle className="mr-2 h-4 w-4" />Nuevo Producto
             </Button>
+          </div>
+          
+          <div className="p-4 bg-white border rounded-lg">
+            <Label htmlFor="filtro-estado" className="text-sm font-medium">Filtrar por estado</Label>
+            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+              <SelectTrigger id="filtro-estado" className="w-[220px] mt-2 border-amber-200">
+                <SelectValue placeholder="Seleccionar estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Mostrar Todos</SelectItem>
+                <SelectItem value="disponible">Disponibles</SelectItem>
+                <SelectItem value="agotado">Agotados</SelectItem>
+                <SelectItem value="descontinuado">Descontinuados</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {isLoadingProductos || isRefreshing ? (
-            <div className="text-center py-8">
-              <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" />
-              <p>Cargando productos...</p>
-            </div>
+            <div className="text-center py-8"><RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" /><p>Cargando productos...</p></div>
           ) : (
-            <ProductosTable
-              productos={productos || []}
-              onEditProducto={handleEditProducto}
-              onDeleteSuccess={handleProductoSuccess}
-            />
+            <ProductosTable productos={productos || []} onEditProducto={handleEditProducto} onDeleteSuccess={handleSuccess} />
           )}
 
-          <ProductoFormModal
-            isOpen={isProductoModalOpen}
-            onClose={() => setIsProductoModalOpen(false)}
-            onSuccess={handleProductoSuccess}
-            producto={selectedProducto}
-            isEditing={isEditingProducto}
-          />
+          <ProductoFormModal isOpen={isProductoModalOpen} onClose={() => setIsProductoModalOpen(false)} onSuccess={handleSuccess} producto={selectedProducto} isEditing={isEditingProducto} />
         </TabsContent>
 
-        {/* Pestaña de Categorías */}
         <TabsContent value="categorias" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-amber-800">Categorías de Productos</h2>
-            <Button className="bg-amber-700 hover:bg-amber-800" onClick={handleNewCategoria}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Nueva Categoría
-            </Button>
-          </div>
-
-          {isLoadingCategorias || isRefreshing ? (
-            <div className="text-center py-8">
-              <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" />
-              <p>Cargando categorías...</p>
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-amber-800">Categorías de Productos</h2>
+                <Button className="bg-amber-700 hover:bg-amber-800" onClick={handleNewCategoria}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Nueva Categoría
+                </Button>
             </div>
-          ) : (
-            <CategoriasTable
-              categorias={categorias || []}
-              onEditCategoria={handleEditCategoria}
-              onSuccess={handleCategoriaSuccess}
-            />
-          )}
-
-          <CategoriaFormModal
-            isOpen={isCategoriaModalOpen}
-            onClose={() => setIsCategoriaModalOpen(false)}
-            onSuccess={handleCategoriaSuccess}
-            categoria={selectedCategoria}
-            isEditing={isEditingCategoria}
-          />
+            {isLoadingCategorias || isRefreshing ? (
+                <div className="text-center py-8">
+                <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" />
+                <p>Cargando categorías...</p>
+                </div>
+            ) : (
+                <CategoriasTable categorias={categorias || []} onEditCategoria={handleEditCategoria} onSuccess={handleSuccess}/>
+            )}
+            <CategoriaFormModal isOpen={isCategoriaModalOpen} onClose={() => setIsCategoriaModalOpen(false)} onSuccess={handleSuccess} categoria={selectedCategoria} isEditing={isEditingCategoria}/>
         </TabsContent>
 
-        {/* Pestaña de Análisis de Precios */}
         <TabsContent value="precios" className="space-y-4">
           <Card>
             <CardHeader>
@@ -288,11 +232,7 @@ export default function ProductosCombinedPage() {
                       </TabsTrigger>
                     ))}
                   </TabsList>
-
-                  <TabsContent value="all">
-                    <PricingTable products={pricingProducts} />
-                  </TabsContent>
-
+                  <TabsContent value="all"><PricingTable products={pricingProducts} /></TabsContent>
                   {uniqueCategories.map((category) => (
                     <TabsContent key={`price-content-${category}`} value={category}>
                       <PricingTable products={pricingProducts.filter((p) => p.category === category)} />

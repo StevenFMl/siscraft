@@ -39,13 +39,7 @@ export async function crearProducto(data: ProductoData) {
       throw new Error(error.message)
     }
 
-    // Revalidamos todas las rutas que podrían mostrar productos
-    revalidatePath("/dashboard/productos")
-    revalidatePath("/dashboard/catalogo")
-    revalidatePath("/dashboard/precios")
-    revalidatePath("/dashboard")
-    revalidatePath("/")
-
+    revalidatePath("/dashboard/productos", "layout")
     return { success: true }
   } catch (error) {
     console.error("Error inesperado:", error)
@@ -58,33 +52,21 @@ export async function editarProducto(data: ProductoData) {
   const { id, ...productoData } = data
 
   try {
-    // Obtenemos el producto actual para comprobar si hay que eliminar una imagen anterior
-    if (productoData.imagen_url) {
-      const { data: productoActual, error: errorConsulta } = await (await supabase)
-        .from("productos")
-        .select("imagen_url")
-        .eq("id", id)
-        .single()
+    // Obtenemos el producto actual para saber si hay que borrar una imagen antigua
+    const { data: productoActual, error: errorConsulta } = await (await supabase)
+      .from("productos")
+      .select("imagen_url")
+      .eq("id", id)
+      .single()
 
-      if (!errorConsulta && productoActual?.imagen_url && productoActual.imagen_url !== productoData.imagen_url) {
-        // El producto tiene una imagen anterior diferente a la nueva, vamos a eliminarla
-        try {
-          // Extraemos la ruta del archivo de la URL pública
-          const urlPartes = productoActual.imagen_url.split("productos-imagenes/")
-          if (urlPartes.length > 1) {
-            const filePath = urlPartes[1]
-
-            // Eliminamos el archivo anterior del storage
-            const { error: errorStorage } = await (await supabase).storage.from("productos-imagenes").remove([filePath])
-
-            if (errorStorage) {
-              console.error("Error al eliminar la imagen anterior del storage:", errorStorage)
-              // Continuamos con la actualización aunque falle la eliminación de la imagen
-            }
-          }
-        } catch (errorImagen) {
-          console.error("Error al procesar la eliminación de la imagen anterior:", errorImagen)
-          // Continuamos con la actualización aunque falle la eliminación de la imagen
+    // Si la URL de la imagen ha cambiado, borramos la antigua del storage
+    if (!errorConsulta && productoActual?.imagen_url && productoActual.imagen_url !== productoData.imagen_url) {
+      // Evitamos borrar las imágenes de ejemplo
+      if (!productoActual.imagen_url.includes('placeholder')) {
+        const urlPartes = productoActual.imagen_url.split("productos-imagenes/")
+        if (urlPartes.length > 1) {
+          const filePath = urlPartes[1]
+          await (await supabase).storage.from("productos-imagenes").remove([filePath])
         }
       }
     }
@@ -109,14 +91,8 @@ export async function editarProducto(data: ProductoData) {
       console.error("Error al actualizar el producto:", error)
       throw new Error(error.message)
     }
-
-    // Revalidamos todas las rutas que podrían mostrar productos
-    revalidatePath("/dashboard/productos")
-    revalidatePath("/dashboard/catalogo")
-    revalidatePath("/dashboard/precios")
-    revalidatePath("/dashboard")
-    revalidatePath("/")
-
+    
+    revalidatePath("/dashboard/productos", "layout")
     return { success: true }
   } catch (error) {
     console.error("Error inesperado:", error)
@@ -128,7 +104,7 @@ export async function eliminarProducto(id: string | number) {
   const supabase = createClient()
 
   try {
-    // PASO 1: Encontrar todas las órdenes que contienen este producto.
+    // 1. Verificamos que el producto no esté en órdenes activas
     const { data: detalles, error: detallesError } = await (await supabase)
       .from("detalles_orden")
       .select("orden_id")
@@ -142,40 +118,55 @@ export async function eliminarProducto(id: string | number) {
     const ordenesIds = detalles.map(d => d.orden_id);
 
     if (ordenesIds.length > 0) {
-      // PASO 2: De esas órdenes, verificar si alguna está en estado 'pendiente' o 'preparando'.
-      const { data: ordenesActivas, error: ordenesError } = await (await supabase)
+      const { data: ordenesActivas } = await (await supabase)
         .from("ordenes")
         .select("id")
         .in("id", ordenesIds)
         .in("estado", ["pendiente", "preparando"])
-        .limit(1); // Solo necesitamos saber si existe al menos una.
+        .limit(1);
 
-      if (ordenesError) {
-        console.error("Error al verificar el estado de las órdenes:", ordenesError);
-        throw new Error("Error al verificar el estado de las órdenes.");
-      }
-
-      // Si se encuentra una orden activa, lanzamos el error con el ID correcto.
       if (ordenesActivas && ordenesActivas.length > 0) {
         throw new Error(`Este producto no puede ser eliminado porque está en una orden activa (ID: ${ordenesActivas[0].id}). Completa o cancela la orden primero.`);
       }
     }
 
-    // Si llegamos aquí, el producto no está en ninguna orden activa. Procedemos a descontinuarlo.
-    const { error } = await (await supabase)
+    // 2. Obtenemos la URL de la imagen ANTES de descontinuar el producto
+    const { data: producto, error: fetchError } = await (await supabase)
+      .from("productos")
+      .select("imagen_url")
+      .eq("id", id)
+      .single();
+    
+    if (fetchError) {
+        console.error("Error al buscar el producto para eliminar su imagen. Se continuará sin borrar la imagen.", fetchError);
+    }
+
+    // 3. Cambiamos el estado del producto a "descontinuado"
+    const { error: updateError } = await (await supabase)
       .from("productos")
       .update({ estado: 'descontinuado' })
       .eq("id", id);
 
-    if (error) {
-      console.error("Error al descontinuar el producto:", error);
-      throw new Error(error.message);
+    if (updateError) {
+      console.error("Error al descontinuar el producto:", updateError);
+      throw new Error(updateError.message);
+    }
+    
+    // 4. Si el producto se descontinuó y tenía una imagen, la borramos del Storage
+    if (producto && producto.imagen_url && !producto.imagen_url.includes('placeholder')) {
+        const urlPartes = producto.imagen_url.split("productos-imagenes/");
+        if (urlPartes.length > 1) {
+            const filePath = urlPartes[1];
+            const { error: storageError } = await (await supabase).storage.from("productos-imagenes").remove([filePath]);
+            
+            if (storageError) {
+                // No detenemos el proceso, pero sí informamos del error en la consola.
+                console.error("No se pudo eliminar la imagen del storage, pero el producto fue descontinuado:", storageError);
+            }
+        }
     }
 
-    revalidatePath("/dashboard/productos")
-    revalidatePath("/dashboard/catalogo")
-    revalidatePath("/dashboard")
-
+    revalidatePath("/dashboard/productos", "layout")
     return { success: true, message: "El producto ha sido marcado como descontinuado." };
 
   } catch (error: any) {
@@ -184,21 +175,19 @@ export async function eliminarProducto(id: string | number) {
   }
 }
 
-export async function obtenerProductosConCategorias() {
+export async function obtenerProductosConCategorias(filtroEstado: string = 'todos') {
   const supabase = createClient()
 
   try {
-    const { data, error } = await (await supabase)
+    let query = (await supabase)
       .from("productos")
-      .select(`
-        *,
-        categorias (
-          id,
-          nombre
-        )
-      `)
-      .neq('estado', 'descontinuado') 
-      .order("nombre")
+      .select(`*, categorias (id, nombre)`);
+
+    if (filtroEstado !== 'todos') {
+      query = query.eq('estado', filtroEstado);
+    }
+    
+    const { data, error } = await query.order("nombre")
 
     if (error) {
       throw new Error(error.message)
