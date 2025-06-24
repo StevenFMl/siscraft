@@ -338,7 +338,7 @@ export async function obtenerOrdenes(fetchDetails: boolean = false) {
   
   // Si se piden los detalles (para la vista cocina), los añadimos a la consulta
   if (fetchDetails) {
-    selectQuery += ', detalles_orden(cantidad, productos(nombre))';
+    selectQuery += ', detalles_orden(cantidad, notas, productos(nombre))';
   }
 
   try {

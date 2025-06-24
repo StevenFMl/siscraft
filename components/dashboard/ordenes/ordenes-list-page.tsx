@@ -41,6 +41,7 @@ interface Cliente {
 }
 interface DetalleOrdenPreview {
     cantidad: number;
+    notas?: string; // Se añade notas aquí
     productos: {
         nombre: string;
     } | null;
@@ -249,7 +250,7 @@ export default function OrdenesListPage() {
     return `${Math.floor(diffInMinutes / 60)}h ${diffInMinutes % 60}m`;
   };
   // Componente de tarjeta de orden para vista cocina
-  const OrdenCard = ({ orden }: { orden: Orden }) => (
+    const OrdenCard = ({ orden }: { orden: Orden }) => (
     <Card className={`mb-4 transition-all duration-200 hover:shadow-lg ${getStatusCardClass(orden.estado)}`}>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
@@ -267,15 +268,19 @@ export default function OrdenesListPage() {
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-         <div className="space-y-2 mb-4">
-            {Array.isArray(orden.detalles_orden) && orden.detalles_orden.slice(0, 3).map((detalle, index) => (
-              <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
-                <div className="flex items-center gap-2"><Coffee className="h-4 w-4 text-amber-600" /><span className="font-medium text-sm">{detalle.productos?.nombre || 'Producto'}</span></div>
-                <Badge variant="secondary" className="text-xs">x{detalle.cantidad}</Badge>
+        <div className="space-y-2 mb-4">
+            {Array.isArray(orden.detalles_orden) && orden.detalles_orden.slice(0, 5).map((detalle, index) => (
+              <div key={index} className="bg-white p-2 rounded border">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2"><Coffee className="h-4 w-4 text-amber-600" /><span className="font-medium text-sm">{detalle.productos?.nombre || 'Producto'}</span></div>
+                    <Badge variant="secondary" className="text-xs">x{detalle.cantidad}</Badge>
+                </div>
+                {/* LÍNEA AÑADIDA: Muestra la nota del producto si existe */}
+                {detalle.notas && <p className="text-xs text-orange-700 italic flex items-center gap-1 mt-1 pl-6"><StickyNote className="h-3 w-3"/>{detalle.notas}</p>}
               </div>
             ))}
-             {Array.isArray(orden.detalles_orden) && orden.detalles_orden.length > 3 && (
-              <div className="text-xs text-gray-500 text-center">+{orden.detalles_orden.length - 3} productos más</div>
+             {Array.isArray(orden.detalles_orden) && orden.detalles_orden.length > 5 && (
+              <div className="text-xs text-gray-500 text-center">+{orden.detalles_orden.length - 5} productos más</div>
             )}
         </div>
         {orden.notas && (
