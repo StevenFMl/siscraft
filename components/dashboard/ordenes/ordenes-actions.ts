@@ -472,3 +472,33 @@ export async function obtenerCategorias() {
     return []
   }
 }
+export async function actualizarNotasDeDetalles(
+  detalles: { id: number | string; notas: string }[]
+) {
+  try {
+    const supabase = await createClient()
+
+    const updatePromises = detalles.map(detalle =>
+      (supabase)
+        .from('detalles_orden')
+        .update({ notas: detalle.notas })
+        .eq('id', detalle.id)
+    );
+
+    const results = await Promise.all(updatePromises);
+
+    const firstError = results.find(res => res.error);
+    if (firstError) {
+      console.error("Error al actualizar una o más notas de detalle:", firstError.error);
+      throw new Error(firstError.error.message);
+    }
+    
+    revalidatePath("/dashboard/ordenes");
+    revalidatePath("/dashboard/catalogo");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error inesperado al actualizar notas de detalle:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Error desconocido" };
+  }
+}

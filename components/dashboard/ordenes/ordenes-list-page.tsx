@@ -86,6 +86,7 @@ export default function OrdenesListPage() {
   const [selectedOrden, setSelectedOrden] = useState<Orden | null>(null)
   const [detallesOrden, setDetallesOrden] = useState<DetalleOrdenCompleto[]>([])
   const [isDetallesOpen, setIsDetallesOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetallesLoading, setIsDetallesLoading] = useState(false)
   const [isChangingStatus, setIsChangingStatus] = useState(false)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
@@ -145,6 +146,10 @@ export default function OrdenesListPage() {
     } finally {
       setIsChangingStatus(false)
     }
+  }
+   const handleEditOrden = (orden: Orden) => {
+    setSelectedOrden(orden);
+    setIsEditModalOpen(true);
   }
   // Función para eliminar una orden
    const handleEliminarOrden = async () => {
@@ -232,8 +237,7 @@ export default function OrdenesListPage() {
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        {/* Productos */}
-       <div className="space-y-2 mb-4">
+        <div className="space-y-2 mb-4">
             {Array.isArray(orden.detalles_orden) && orden.detalles_orden.slice(0, 3).map((detalle, index) => (
               <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
                 <div className="flex items-center gap-2">
@@ -243,17 +247,13 @@ export default function OrdenesListPage() {
                 <Badge variant="secondary" className="text-xs">x{detalle.cantidad}</Badge>
               </div>
             ))}
-          {Array.isArray(orden.detalles_orden) && orden.detalles_orden.length > 3 && (
+             {Array.isArray(orden.detalles_orden) && orden.detalles_orden.length > 3 && (
               <div className="text-xs text-gray-500 text-center">+{orden.detalles_orden.length - 3} productos más</div>
             )}
         </div>
-        {/* Notas especiales */}
         {orden.notas && (
-          <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded">
-            <div className="flex items-start gap-2">
-              <StickyNote className="h-4 w-4 text-yellow-600 mt-0.5" />
-              <span className="text-sm text-yellow-800">{orden.notas}</span>
-            </div>
+          <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+            <div className="flex items-start gap-2"><StickyNote className="h-4 w-4 text-yellow-600 mt-0.5" /><span className="text-sm text-yellow-800">{orden.notas}</span></div>
           </div>
         )}
         {/* Método de pago */}
@@ -272,9 +272,11 @@ export default function OrdenesListPage() {
 
         {/* Botones de acción */}
          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleVerDetalles(orden)} className="flex-1"><Eye className="h-4 w-4 mr-1" />Ver</Button>
-            {orden.estado === "pendiente" && (<Button size="sm" onClick={() => handleCambiarEstado(orden.id, "preparando")} disabled={isChangingStatus} className="flex-1 bg-blue-600 hover:bg-blue-700"><ChefHat className="h-4 w-4 mr-1" />Cocinar</Button>)}
-            {orden.estado === "preparando" && (<Button size="sm" onClick={() => handleCambiarEstado(orden.id, "completada")} disabled={isChangingStatus} className="flex-1 bg-green-600 hover:bg-green-700"><CheckCircle className="h-4 w-4 mr-1" />Listo</Button>)}
+             <Button variant="outline" size="sm" onClick={() => handleVerDetalles(orden)} className="flex-1"><Eye className="h-4 w-4 mr-1" />Ver / Editar</Button>
+        </div>
+        <div className="flex gap-2 mt-2">
+          {orden.estado === "pendiente" && (<Button size="sm" onClick={() => handleCambiarEstado(orden.id, "preparando")} disabled={isChangingStatus} className="flex-1 bg-blue-600 hover:bg-blue-700"><ChefHat className="h-4 w-4 mr-1" />Cocinar</Button>)}
+          {orden.estado === "preparando" && (<Button size="sm" onClick={() => handleCambiarEstado(orden.id, "completada")} disabled={isChangingStatus} className="flex-1 bg-green-600 hover:bg-green-700"><CheckCircle className="h-4 w-4 mr-1" />Listo</Button>)}
         </div>
       </CardContent>
     </Card>
@@ -289,16 +291,12 @@ export default function OrdenesListPage() {
             <TabsTrigger value="cocina"><LayoutGrid className="h-4 w-4 mr-2" />Vista Cocina</TabsTrigger>
             <TabsTrigger value="lista"><List className="h-4 w-4 mr-2" />Lista Completa</TabsTrigger>
           </TabsList>
-          <Button variant="outline" size="sm" onClick={loadOrdenes} disabled={isLoading} className="flex items-center gap-1 min-w-[120px]">
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            {isLoading ? "Cargando..." : "Actualizar"}
-          </Button>
+          <Button variant="outline" size="sm" onClick={loadOrdenes} disabled={isLoading} className="flex items-center gap-1 min-w-[120px]"><RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />{isLoading ? "Cargando..." : "Actualizar"}</Button>
         </div>
         <TabsContent value="cocina" className="space-y-4">
-          {isLoading ? (
-            <div className="text-center py-8"><RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" /><p>Cargando órdenes...</p></div>
+          {isLoading ? ( <div className="text-center py-8"><RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" /><p>Cargando órdenes...</p></div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 p-4 bg-orange-100 border border-orange-200 rounded-lg">
                   <Clock className="h-5 w-5 text-orange-600" />
@@ -325,13 +323,7 @@ export default function OrdenesListPage() {
         </TabsContent>
         <TabsContent value="lista" className="space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="mb-4 flex flex-wrap">
-              <TabsTrigger value="todas">Todas</TabsTrigger>
-              <TabsTrigger value="pendiente">Pendientes</TabsTrigger>
-              <TabsTrigger value="preparando">En Proceso</TabsTrigger> {/* CAMBIADO: De "en_proceso" a "preparando" */}
-              <TabsTrigger value="completada">Completadas</TabsTrigger>
-              <TabsTrigger value="cancelada">Canceladas</TabsTrigger> {/* CORREGIDO: </TabsTrigger> */}
-            </TabsList>
+            <TabsList className="mb-4 flex flex-wrap"><TabsTrigger value="todas">Todas</TabsTrigger><TabsTrigger value="pendiente">Pendientes</TabsTrigger><TabsTrigger value="preparando">En Proceso</TabsTrigger><TabsTrigger value="completada">Completadas</TabsTrigger><TabsTrigger value="cancelada">Canceladas</TabsTrigger></TabsList>
             <Card>
               <CardHeader>
                 <CardTitle className="text-amber-800">
@@ -493,17 +485,9 @@ export default function OrdenesListPage() {
       {/* Modal de Detalles de Orden */}
       <Dialog open={isDetallesOpen} onOpenChange={setIsDetallesOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-amber-900">
-              Detalles de la Orden #{selectedOrden?.id}
-            </DialogTitle>
-          </DialogHeader>
-          {isDetallesLoading ? (
-            <div className="text-center py-8">
-              <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" />
-              <p>Cargando detalles...</p>
-            </div>
-          ) : (
+            <DialogHeader><DialogTitle className="text-xl font-bold text-amber-900">Detalles de la Orden #{selectedOrden?.id}</DialogTitle></DialogHeader>
+            {isDetallesLoading ? ( <div className="text-center py-8"><RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" /><p>Cargando detalles...</p></div>
+            ) : ( 
             <div className="space-y-6">
               {selectedOrden && (
                 <>
@@ -558,13 +542,8 @@ export default function OrdenesListPage() {
                       </p>
                     </div>
                   </div>
-                  {selectedOrden.notas && (
+                  {selectedOrden.notas && <div className="border-t pt-4 mt-4"><h3 className="font-medium text-gray-500">Notas Generales de la Orden</h3><p className="text-sm mt-1">{selectedOrden.notas}</p></div>}
                     <div>
-                      <h3 className="font-medium text-gray-500">Notas</h3>
-                      <p>{selectedOrden.notas}</p>
-                    </div>
-                  )}
-                  <div>
                     <h3 className="font-medium text-gray-500 mb-2">Productos</h3>
                     {detallesOrden.length === 0 ? (
                       <div className="text-center py-4 border rounded-md">
@@ -576,54 +555,15 @@ export default function OrdenesListPage() {
                       </div>
                     ) : (
                       <div className="border rounded-md overflow-hidden">
-                        <Table>
-                          <TableHeader className="bg-amber-50">
-                            <TableRow>
-                              <TableHead>Producto</TableHead>
-                              <TableHead className="text-center">Cantidad</TableHead>
-                              <TableHead className="text-right">Precio</TableHead>
-                              <TableHead className="text-right">Subtotal</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {detallesOrden.map((detalle) => (
-                              <TableRow key={detalle.id}>
+                         <Table>
+                            <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead className="text-center">Cant.</TableHead><TableHead className="text-right">Precio</TableHead><TableHead className="text-right">Subtotal</TableHead></TableRow></TableHeader>
+                            <TableBody>{detallesOrden.map((d, i) => <TableRow key={d.id || i}>
                                 <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    {detalle.productos?.imagen_url ? (
-                                      <div className="h-10 w-10 rounded overflow-hidden bg-amber-50">
-                                        <img
-                                          src={detalle.productos.imagen_url || "/placeholder.svg"}
-                                          alt={getProductName(detalle)}
-                                          className="h-full w-full object-cover"
-                                          onError={(e) => {
-                                            e.currentTarget.style.display = "none"
-                                            e.currentTarget.nextElementSibling?.classList.remove("hidden")
-                                          }}
-                                        />
-                                        <div className="hidden absolute inset-0 flex items-center justify-center">
-                                          <Coffee className="h-6 w-6 text-amber-500" />
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="h-10 w-10 rounded overflow-hidden bg-amber-50 flex items-center justify-center">
-                                        <Coffee className="h-6 w-6 text-amber-500" />
-                                      </div>
-                                    )}
-                                    <div>
-                                      <p className="font-medium">{getProductName(detalle)}</p>
-                                      {detalle.notas && <p className="text-xs text-gray-500">{detalle.notas}</p>}
-                                    </div>
-                                  </div>
+                                    <p className="font-medium">{getProductName(d)}</p>
+                                    {d.notas && <p className="text-xs text-orange-700 flex items-center gap-1"><StickyNote className="h-3 w-3"/>{d.notas}</p>}
                                 </TableCell>
-                                <TableCell className="text-center">{detalle.cantidad}</TableCell>
-                                <TableCell className="text-right">${detalle.precio_unitario.toFixed(2)}</TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {(detalle.subtotal || detalle.precio_unitario * detalle.cantidad).toFixed(2)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
+                                <TableCell className="text-center">{d.cantidad}</TableCell><TableCell className="text-right">${(d.precio_unitario || 0).toFixed(2)}</TableCell><TableCell className="text-right">${(d.subtotal || 0).toFixed(2)}</TableCell>
+                            </TableRow>)}</TableBody>
                         </Table>
                       </div>
                     )}
