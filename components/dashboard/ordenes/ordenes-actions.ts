@@ -330,29 +330,24 @@ export async function cambiarEstadoOrden(id: string | number, estado: string) {
   }
 }
 
-
-
-
 export async function obtenerOrdenes() {
   try {
     const supabase = await createClient()
-    // Obtener órdenes con join a clientes
     const { data, error } = await supabase
       .from("ordenes")
       .select(`
         *,
-        clientes(id, nombre, apellido, email, telefono, puntos_fidelidad)
+        clientes(id, nombre, apellido, email, telefono, puntos_fidelidad),
+        detalles_orden (
+            cantidad,
+            productos ( nombre )
+        )
       `)
       .order("fecha_orden", { ascending: false })
 
     if (error) {
       console.error("Error al obtener órdenes:", error)
       throw error
-    }
-    // Verificar si hay datos
-    console.log("Órdenes obtenidas:", data?.length || 0)
-    if (data && data.length > 0) {
-      console.log("Primera orden:", data[0])
     }
     return data || []
   } catch (error) {

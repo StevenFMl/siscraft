@@ -37,7 +37,12 @@ interface Cliente {
   telefono?: string
   puntos_fidelidad?: number
 }
-
+interface DetalleOrdenPreview {
+    cantidad: number;
+    productos: {
+        nombre: string;
+    } | null;
+}
 interface Orden {
   id: number | string
   id_cliente?: string
@@ -52,9 +57,10 @@ interface Orden {
   created_at: string
   fecha_orden: string
   clientes?: Cliente
+  detalles_orden: DetalleOrdenPreview[]
 }
 
-interface DetalleOrden {
+interface DetalleOrdenCompleto {
   id: number | string
   orden_id: number | string
   producto_id: number | string
@@ -75,10 +81,10 @@ interface DetalleOrden {
 export default function OrdenesListPage() {
   const [ordenes, setOrdenes] = useState<Orden[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeView, setActiveView] = useState("cocina") // Vista principal: cocina o lista
-  const [activeTab, setActiveTab] = useState("todas") // Para filtros en vista lista
+  const [activeView, setActiveView] = useState("cocina")
+  const [activeTab, setActiveTab] = useState("todas")
   const [selectedOrden, setSelectedOrden] = useState<Orden | null>(null)
-  const [detallesOrden, setDetallesOrden] = useState<DetalleOrden[]>([])
+  const [detallesOrden, setDetallesOrden] = useState<DetalleOrdenCompleto[]>([])
   const [isDetallesOpen, setIsDetallesOpen] = useState(false)
   const [isDetallesLoading, setIsDetallesLoading] = useState(false)
   const [isChangingStatus, setIsChangingStatus] = useState(false)
@@ -86,239 +92,161 @@ export default function OrdenesListPage() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   // Cargar órdenes al montar el componente
-  useEffect(() => {
+ useEffect(() => {
     loadOrdenes()
-    // Actualizar cada 30 segundos para la vista de cocina
     const interval = setInterval(loadOrdenes, 30000)
     return () => clearInterval(interval)
   }, [])
-
   // Función para cargar órdenes
-  const loadOrdenes = async () => {
-    setIsLoading(true)
+ const loadOrdenes = async () => {
+    if (!isLoading) setIsLoading(true);
     try {
       const data = await obtenerOrdenes()
-      console.log("Órdenes cargadas:", data)
-      setOrdenes(data)
+      setOrdenes(data || [])
     } catch (error) {
       console.error("Error al cargar órdenes:", error)
-      toast.error("Error al cargar órdenes. Por favor, intenta de nuevo.")
+      toast.error("Error al cargar órdenes.")
+      setOrdenes([])
     } finally {
       setIsLoading(false)
     }
   }
-
   // Función para ver detalles de una orden
-  const handleVerDetalles = async (orden: Orden) => {
+   const handleVerDetalles = async (orden: Orden) => {
     setSelectedOrden(orden)
     setIsDetallesOpen(true)
     setIsDetallesLoading(true)
-    setDetallesOrden([]) // Limpiar detalles anteriores
-
+    setDetallesOrden([])
     try {
       const detalles = await obtenerDetallesOrden(orden.id)
-      console.log("Detalles de orden cargados:", detalles)
       setDetallesOrden(detalles)
     } catch (error) {
       console.error("Error al cargar detalles de la orden:", error)
-      toast.error("Error al cargar detalles de la orden. Por favor, intenta de nuevo.")
+      toast.error("Error al cargar detalles de la orden.")
     } finally {
       setIsDetallesLoading(false)
     }
   }
-
   // Función para cambiar el estado de una orden
   const handleCambiarEstado = async (ordenId: string | number, nuevoEstado: string) => {
     setIsChangingStatus(true)
-
     try {
       const result = await cambiarEstadoOrden(ordenId, nuevoEstado)
-
       if (result.success) {
-        // Actualizar el estado de la orden en el estado local
-        setOrdenes((prevOrdenes) =>
-          prevOrdenes.map((orden) => (orden.id === ordenId ? { ...orden, estado: nuevoEstado } : orden)),
-        )
-
-        // Si estamos viendo los detalles de esta orden, actualizar también el estado seleccionado
-        if (selectedOrden && selectedOrden.id === ordenId) {
-          setSelectedOrden({ ...selectedOrden, estado: nuevoEstado })
-        }
-
+        setOrdenes((prev) => prev.map((o) => (o.id === ordenId ? { ...o, estado: nuevoEstado } : o)))
+        if (selectedOrden?.id === ordenId) setSelectedOrden({ ...selectedOrden, estado: nuevoEstado })
         toast.success(`Estado de la orden actualizado a: ${nuevoEstado}`)
       } else {
-        // Mejorar el mensaje de error para el usuario
-        const errorMessage = result.error || "Error desconocido al cambiar estado de la orden."
-        toast.error(`Error: ${errorMessage}`)
+        toast.error(result.error || "Error desconocido al cambiar estado de la orden.")
       }
     } catch (error) {
       console.error("Error al cambiar el estado de la orden:", error)
-      toast.error("Error al cambiar el estado de la orden. Por favor, intenta de nuevo.")
+      toast.error("Error al cambiar el estado de la orden.")
     } finally {
       setIsChangingStatus(false)
     }
   }
-
   // Función para eliminar una orden
-  const handleEliminarOrden = async () => {
+   const handleEliminarOrden = async () => {
     if (!selectedOrden) return
-
     setIsDeleting(true)
     try {
       const result = await eliminarOrden(selectedOrden.id)
-
       if (result.success) {
-        // Cerrar el modal de confirmación y detalles
         setIsDeleteConfirmOpen(false)
         setIsDetallesOpen(false)
-
-        // Actualizar la lista de órdenes
-        setOrdenes((prevOrdenes) => prevOrdenes.filter((orden) => orden.id !== selectedOrden.id))
-
+        setOrdenes((prev) => prev.filter((o) => o.id !== selectedOrden.id))
         toast.success("Orden eliminada correctamente")
       } else {
-        toast.error("No se pudo eliminar la orden. Por favor, intenta de nuevo.")
+        toast.error("No se pudo eliminar la orden.")
       }
     } catch (error) {
       console.error("Error al eliminar la orden:", error)
-      toast.error("Error al eliminar la orden. Por favor, intenta de nuevo.")
+      toast.error("Error al eliminar la orden.")
     } finally {
       setIsDeleting(false)
     }
   }
-
-  // Filtrar órdenes según la pestaña activa (solo para vista lista)
-  const filteredOrdenes = ordenes.filter((orden) => {
-    if (activeTab === "todas") return true
-    // Alinear con el estado de la base de datos: "preparando"
-    return orden.estado === activeTab
-  })
-
+  const ordenesValidas = Array.isArray(ordenes) ? ordenes : []
+  const filteredOrdenes = ordenesValidas.filter((orden) => activeTab === "todas" || orden.estado === activeTab)
+  const ordenesPendientes = ordenesValidas.filter((orden) => orden.estado === "pendiente")
+  const ordenesEnProceso = ordenesValidas.filter((orden) => orden.estado === "preparando")
+  const ordenesCompletadas = ordenesValidas.filter((orden) => orden.estado === "completada")
   // Función para obtener el color de la insignia según el estado
-  const getBadgeVariant = (estado: string) => {
+ const getBadgeVariant = (estado: string) => {
     switch (estado) {
-      case "completada":
-        return "bg-green-100 text-green-800 border-green-200"
-      case "pendiente":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200"
-      case "cancelada":
-        return "bg-red-100 text-red-800 border-red-200"
-      case "preparando": // CAMBIADO: De "en_proceso" a "preparando"
-        return "bg-blue-100 text-blue-800 border-blue-200"
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
+      case "completada": return "bg-green-100 text-green-800 border-green-200"
+      case "pendiente": return "bg-orange-100 text-orange-800 border-orange-200"
+      case "cancelada": return "bg-red-100 text-red-800 border-red-200"
+      case "preparando": return "bg-blue-100 text-blue-800 border-blue-200"
+      default: return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
-
+  const getStatusCardClass = (estado: string) => {
+    switch (estado) {
+        case 'completada': return 'bg-green-50 border-green-400';
+        case 'pendiente': return 'bg-orange-50 border-orange-400';
+        case 'cancelada': return 'bg-red-50 border-red-400';
+        case 'preparando': return 'bg-blue-50 border-blue-400';
+        default: return 'bg-gray-50 border-gray-300';
+    }
+  };
   // Función para formatear fecha
   const formatDate = (dateString: string) => {
     try {
-      const date = new Date(dateString)
-      return new Intl.DateTimeFormat("es-ES", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(date)
-    } catch (e) {
-      return "Fecha inválida"
-    }
-  }
+      if (!dateString) return "Fecha inválida";
+      return new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(dateString));
+    } catch (e) { return "Fecha inválida"; }
+  };
 
   // Función para obtener el nombre del producto
-  const getProductName = (detalle: DetalleOrden) => {
-    if (detalle.productos && detalle.productos.nombre) {
-      return detalle.productos.nombre
-    }
-    if (detalle.nombre_producto) {
-      return detalle.nombre_producto
-    }
+  const getProductName = (detalle: DetalleOrdenCompleto) => {
+    if (detalle.productos?.nombre) return detalle.productos.nombre
+    if (detalle.nombre_producto) return detalle.nombre_producto
     return `Producto #${detalle.producto_id}`
   }
-
   // Función para calcular tiempo transcurrido
-  const getTimeElapsed = (fechaOrden: string) => {
-    const now = new Date()
-    const orderTime = new Date(fechaOrden)
-    const diffInMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60))
-
-    if (isNaN(diffInMinutes)) return "Fecha inválida"
-
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes}m`
-    } else {
-      const hours = Math.floor(diffInMinutes / 60)
-      const minutes = diffInMinutes % 60
-      return `${hours}h ${minutes}m`
-    }
-  }
-
-  // Función para obtener color de prioridad basado en tiempo
-  const getPriorityColor = (fechaOrden: string) => {
-    const orderTime = new Date(fechaOrden)
-    if (isNaN(orderTime.getTime())) return "border-gray-300 bg-gray-50"
-
-    const now = new Date()
-    const diffInMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60))
-
-    if (diffInMinutes > 30) return "border-red-500 bg-red-50"
-    if (diffInMinutes > 15) return "border-yellow-500 bg-yellow-50"
-    return "border-green-500 bg-green-50"
-  }
-
+   const getTimeElapsed = (fechaOrden: string) => {
+    if (!fechaOrden) return "0m";
+    const diffInMinutes = Math.floor((new Date().getTime() - new Date(fechaOrden).getTime()) / 60000);
+    if (isNaN(diffInMinutes) || diffInMinutes < 0) return "0m";
+    if (diffInMinutes < 60) return `${diffInMinutes}m`;
+    return `${Math.floor(diffInMinutes / 60)}h ${diffInMinutes % 60}m`;
+  };
   // Componente de tarjeta de orden para vista cocina
-  const OrdenCard = ({ orden }: { orden: Orden }) => (
-    <Card
-      className={`mb-4 transition-all duration-200 hover:shadow-lg ${getPriorityColor(orden.fecha_orden || orden.created_at)}`}
-    >
+ const OrdenCard = ({ orden }: { orden: Orden }) => (
+    <Card className={`mb-4 transition-all duration-200 hover:shadow-lg ${getStatusCardClass(orden.estado)}`}>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg font-bold text-amber-900">Orden #{orden.id}</CardTitle>
             <div className="flex items-center gap-2 mt-1">
               <User className="h-4 w-4 text-gray-500" />
-              <span className="text-sm text-gray-600">
-                {orden.clientes
-                  ? `${orden.clientes.nombre} ${orden.clientes.apellido || ""}`
-                  : `Cliente ${orden.id_cliente}`}
-              </span>
+              <span className="text-sm text-gray-600">{orden.clientes ? `${orden.clientes.nombre} ${orden.clientes.apellido || ""}` : `Cliente`}</span>
             </div>
           </div>
           <div className="text-right">
-            <div className="flex items-center gap-1 text-sm text-gray-500">
-              <Timer className="h-4 w-4" />
-              {getTimeElapsed(orden.fecha_orden || orden.created_at)}
-            </div>
-            <div className="text-lg font-bold text-amber-800">${orden.total.toFixed(2)}</div>
+            <div className="flex items-center gap-1 text-sm text-gray-500"><Timer className="h-4 w-4" />{getTimeElapsed(orden.fecha_orden || orden.created_at)}</div>
+            <div className="text-lg font-bold text-amber-800">${(orden.total || 0).toFixed(2)}</div>
           </div>
         </div>
       </CardHeader>
-
       <CardContent className="pt-0">
         {/* Productos */}
-        <div className="space-y-2 mb-4">
-          {(detallesOrden || [])
-              .filter((d) => d.orden_id === orden.id)
-              .slice(0, 3)
-              .map((detalle, index) => (
+       <div className="space-y-2 mb-4">
+            {Array.isArray(orden.detalles_orden) && orden.detalles_orden.slice(0, 3).map((detalle, index) => (
               <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
                 <div className="flex items-center gap-2">
                   <Coffee className="h-4 w-4 text-amber-600" />
-                  <span className="font-medium text-sm">{getProductName(detalle)}</span>
+                  <span className="font-medium text-sm">{detalle.productos?.nombre || 'Producto'}</span>
                 </div>
-                <Badge variant="secondary" className="text-xs">
-                  x{detalle.cantidad}
-                </Badge>
+                <Badge variant="secondary" className="text-xs">x{detalle.cantidad}</Badge>
               </div>
             ))}
-          {(detallesOrden || []).filter((d) => d.orden_id === orden.id).length > 3 && (
-              <div className="text-xs text-gray-500 text-center">
-              +{(detallesOrden || []).filter((d) => d.orden_id === orden.id).length - 3} productos más
-                </div>
-               )}
+          {Array.isArray(orden.detalles_orden) && orden.detalles_orden.length > 3 && (
+              <div className="text-xs text-gray-500 text-center">+{orden.detalles_orden.length - 3} productos más</div>
+            )}
         </div>
-
         {/* Notas especiales */}
         {orden.notas && (
           <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded">
@@ -328,7 +256,6 @@ export default function OrdenesListPage() {
             </div>
           </div>
         )}
-
         {/* Método de pago */}
         <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
           <CreditCard className="h-4 w-4" />
@@ -344,139 +271,58 @@ export default function OrdenesListPage() {
         </div>
 
         {/* Botones de acción */}
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => handleVerDetalles(orden)} className="flex-1">
-            <Eye className="h-4 w-4 mr-1" />
-            Ver
-          </Button>
-
-          {orden.estado === "pendiente" && (
-            <Button
-              size="sm"
-              onClick={() => handleCambiarEstado(orden.id, "preparando")} // CAMBIADO: De "en_proceso" a "preparando"
-              disabled={isChangingStatus}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
-            >
-              <ChefHat className="h-4 w-4 mr-1" />
-              Cocinar
-            </Button>
-          )}
-
-          {orden.estado === "preparando" && ( // CAMBIADO: La condición de "en_proceso" a "preparando"
-            <Button
-              size="sm"
-              onClick={() => handleCambiarEstado(orden.id, "completada")}
-              disabled={isChangingStatus}
-              className="flex-1 bg-green-600 hover:bg-green-700"
-            >
-              <CheckCircle className="h-4 w-4 mr-1" />
-              Listo
-            </Button>
-          )}
+         <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => handleVerDetalles(orden)} className="flex-1"><Eye className="h-4 w-4 mr-1" />Ver</Button>
+            {orden.estado === "pendiente" && (<Button size="sm" onClick={() => handleCambiarEstado(orden.id, "preparando")} disabled={isChangingStatus} className="flex-1 bg-blue-600 hover:bg-blue-700"><ChefHat className="h-4 w-4 mr-1" />Cocinar</Button>)}
+            {orden.estado === "preparando" && (<Button size="sm" onClick={() => handleCambiarEstado(orden.id, "completada")} disabled={isChangingStatus} className="flex-1 bg-green-600 hover:bg-green-700"><CheckCircle className="h-4 w-4 mr-1" />Listo</Button>)}
         </div>
       </CardContent>
     </Card>
   )
-
   // Filtrar órdenes por estado para vista cocina
-  const ordenesPendientes = ordenes.filter((orden) => orden.estado === "pendiente")
-  const ordenesEnProceso = ordenes.filter((orden) => orden.estado === "preparando") 
-  const ordenesCompletadas = ordenes.filter((orden) => orden.estado === "completada")
-  return (
+   return (
     <div className="space-y-6">
-      {/* Encabezado principal con título y el botón de actualizar */}
-      <div className="flex justify-between items-center">
-      </div>
-
+      <div className="flex justify-between items-center"></div>
       <Tabs value={activeView} onValueChange={setActiveView} className="space-y-4">
-        {/* Contenedor FLEX para TabsList y el botón de Actualizar */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <TabsList className="grid w-full max-w-md grid-cols-2 flex-grow sm:flex-grow-0">
-            <TabsTrigger value="cocina" className="flex items-center gap-2">
-              <LayoutGrid className="h-4 w-4" />
-              Vista Cocina
-            </TabsTrigger>
-            <TabsTrigger value="lista" className="flex items-center gap-2">
-              <List className="h-4 w-4" />
-              Lista Completa
-            </TabsTrigger>
+            <TabsTrigger value="cocina"><LayoutGrid className="h-4 w-4 mr-2" />Vista Cocina</TabsTrigger>
+            <TabsTrigger value="lista"><List className="h-4 w-4 mr-2" />Lista Completa</TabsTrigger>
           </TabsList>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadOrdenes}
-            disabled={isLoading}
-            className="flex items-center gap-1 min-w-[120px]" 
-          >
+          <Button variant="outline" size="sm" onClick={loadOrdenes} disabled={isLoading} className="flex items-center gap-1 min-w-[120px]">
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
             {isLoading ? "Cargando..." : "Actualizar"}
           </Button>
         </div>
         <TabsContent value="cocina" className="space-y-4">
           {isLoading ? (
-            <div className="text-center py-8">
-              <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" />
-              <p>Cargando órdenes...</p>
-            </div>
+            <div className="text-center py-8"><RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" /><p>Cargando órdenes...</p></div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Columna Pendientes */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <Clock className="h-5 w-5 text-yellow-600" />
-                  <h3 className="font-bold text-yellow-800">Pendientes ({ordenesPendientes.length})</h3>
+                <div className="flex items-center gap-2 p-4 bg-orange-100 border border-orange-200 rounded-lg">
+                  <Clock className="h-5 w-5 text-orange-600" />
+                  <h3 className="font-bold text-orange-800">Pendientes ({ordenesPendientes.length})</h3>
                 </div>
-                <ScrollArea className="h-[600px]">
-                  {ordenesPendientes.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <Clock className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                      <p>No hay órdenes pendientes</p>
-                    </div>
-                  ) : (
-                    ordenesPendientes.map((orden) => <OrdenCard key={orden.id} orden={orden} />)
-                  )}
-                </ScrollArea>
+                <ScrollArea className="h-[600px] p-1">{ordenesPendientes.length > 0 ? ordenesPendientes.map((orden) => <OrdenCard key={orden.id} orden={orden} />) : <div className="text-center py-8 text-gray-500"><Clock className="h-12 w-12 mx-auto mb-3 opacity-20" /><p>No hay órdenes pendientes</p></div>}</ScrollArea>
               </div>
-
-              {/* Columna En Proceso */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <ChefHat className="h-5 w-5 text-blue-600" />
                   <h3 className="font-bold text-blue-800">En Cocina ({ordenesEnProceso.length})</h3>
                 </div>
-                <ScrollArea className="h-[600px]">
-                  {ordenesEnProceso.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <ChefHat className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                      <p>No hay órdenes en cocina</p>
-                    </div>
-                  ) : (
-                    ordenesEnProceso.map((orden) => <OrdenCard key={orden.id} orden={orden} />)
-                  )}
-                </ScrollArea>
+                <ScrollArea className="h-[600px] p-1">{ordenesEnProceso.length > 0 ? ordenesEnProceso.map((orden) => <OrdenCard key={orden.id} orden={orden} />) : <div className="text-center py-8 text-gray-500"><ChefHat className="h-12 w-12 mx-auto mb-3 opacity-20" /><p>No hay órdenes en cocina</p></div>}</ScrollArea>
               </div>
-
-              {/* Columna Completadas */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 rounded-lg">
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <h3 className="font-bold text-green-800">Listas ({ordenesCompletadas.length})</h3>
                 </div>
-                <ScrollArea className="h-[600px]">
-                  {ordenesCompletadas.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                      <p>No hay órdenes completadas</p>
-                    </div>
-                  ) : (
-                    ordenesCompletadas.slice(0, 10).map((orden) => <OrdenCard key={orden.id} orden={orden} />)
-                  )}
-                </ScrollArea>
+                <ScrollArea className="h-[600px] p-1">{ordenesCompletadas.length > 0 ? ordenesCompletadas.slice(0, 10).map((orden) => <OrdenCard key={orden.id} orden={orden} />) : <div className="text-center py-8 text-gray-500"><CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-20" /><p>No hay órdenes completadas</p></div>}</ScrollArea>
               </div>
             </div>
           )}
         </TabsContent>
-
         <TabsContent value="lista" className="space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="mb-4 flex flex-wrap">
@@ -486,7 +332,6 @@ export default function OrdenesListPage() {
               <TabsTrigger value="completada">Completadas</TabsTrigger>
               <TabsTrigger value="cancelada">Canceladas</TabsTrigger> {/* CORREGIDO: </TabsTrigger> */}
             </TabsList>
-
             <Card>
               <CardHeader>
                 <CardTitle className="text-amber-800">
@@ -598,7 +443,6 @@ export default function OrdenesListPage() {
                                       </Button>
                                     </>
                                   )}
-
                                   {orden.estado === "preparando" && ( // CAMBIADO: La condición de "en_proceso" a "preparando"
                                     <Button
                                       variant="outline"
@@ -646,7 +490,6 @@ export default function OrdenesListPage() {
           </Tabs>
         </TabsContent>
       </Tabs>
-
       {/* Modal de Detalles de Orden */}
       <Dialog open={isDetallesOpen} onOpenChange={setIsDetallesOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
@@ -655,7 +498,6 @@ export default function OrdenesListPage() {
               Detalles de la Orden #{selectedOrden?.id}
             </DialogTitle>
           </DialogHeader>
-
           {isDetallesLoading ? (
             <div className="text-center py-8">
               <RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" />
@@ -716,14 +558,12 @@ export default function OrdenesListPage() {
                       </p>
                     </div>
                   </div>
-
                   {selectedOrden.notas && (
                     <div>
                       <h3 className="font-medium text-gray-500">Notas</h3>
                       <p>{selectedOrden.notas}</p>
                     </div>
                   )}
-
                   <div>
                     <h3 className="font-medium text-gray-500 mb-2">Productos</h3>
                     {detallesOrden.length === 0 ? (
@@ -788,14 +628,13 @@ export default function OrdenesListPage() {
                       </div>
                     )}
                   </div>
-
                   <div className="space-y-1 border-t pt-4">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
                       <span>${selectedOrden.subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Impuestos (13%):</span>
+                      <span>Impuestos (15%):</span>
                       <span>${selectedOrden.impuestos.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg">
@@ -809,7 +648,6 @@ export default function OrdenesListPage() {
                       </div>
                     )}
                   </div>
-
                   {/* Botones de acción según el estado */}
                   <div className="flex flex-wrap gap-2 justify-end">
                     {selectedOrden.estado === "pendiente" && (
@@ -834,7 +672,6 @@ export default function OrdenesListPage() {
                         </Button>
                       </>
                     )}
-
                     {selectedOrden.estado === "preparando" && ( // CAMBIADO: La condición de "en_proceso" a "preparando"
                       <Button
                         variant="outline"
@@ -846,7 +683,6 @@ export default function OrdenesListPage() {
                         Completar Orden
                       </Button>
                     )}
-
                     {/* Botones de editar y eliminar */}
                     <Button
                       variant="outline"
@@ -858,7 +694,6 @@ export default function OrdenesListPage() {
                       <Pencil className="h-4 w-4 mr-1" />
                       Editar
                     </Button>
-
                     <Button
                       variant="outline"
                       className="border-red-200 text-red-800 hover:bg-red-50"
@@ -872,7 +707,6 @@ export default function OrdenesListPage() {
               )}
             </div>
           )}
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDetallesOpen(false)}>
               Cerrar
@@ -880,29 +714,12 @@ export default function OrdenesListPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Modal de Confirmación de Eliminación */}
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
         <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-red-900">Confirmar Eliminación</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p>¿Estás seguro de que deseas eliminar esta orden? Esta acción no se puede deshacer.</p>
-          </div>
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)} disabled={isDeleting}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleEliminarOrden}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting ? "Eliminando..." : "Eliminar"}
-            </Button>
-          </DialogFooter>
+          <DialogHeader><DialogTitle className="text-xl font-bold text-red-900">Confirmar Eliminación</DialogTitle></DialogHeader>
+          <div className="py-4"><p>¿Estás seguro de que deseas eliminar esta orden? Esta acción no se puede deshacer.</p></div>
+          <DialogFooter><Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)} disabled={isDeleting}>Cancelar</Button><Button variant="destructive" onClick={handleEliminarOrden} disabled={isDeleting} className="bg-red-600 hover:bg-red-700">{isDeleting ? "Eliminando..." : "Eliminar"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
