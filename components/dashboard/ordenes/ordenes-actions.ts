@@ -330,19 +330,21 @@ export async function cambiarEstadoOrden(id: string | number, estado: string) {
   }
 }
 
-export async function obtenerOrdenes() {
+export async function obtenerOrdenes(fetchDetails: boolean = false) {
+  const supabase = await createClient()
+  
+  // Construimos la consulta base
+  let selectQuery = '*, clientes(id, nombre, apellido)';
+  
+  // Si se piden los detalles (para la vista cocina), los añadimos a la consulta
+  if (fetchDetails) {
+    selectQuery += ', detalles_orden(cantidad, productos(nombre))';
+  }
+
   try {
-    const supabase = await createClient()
     const { data, error } = await supabase
       .from("ordenes")
-      .select(`
-        *,
-        clientes(id, nombre, apellido, email, telefono, puntos_fidelidad),
-        detalles_orden (
-            cantidad,
-            productos ( nombre )
-        )
-      `)
+      .select(selectQuery)
       .order("fecha_orden", { ascending: false })
 
     if (error) {
@@ -478,23 +480,22 @@ export async function actualizarNotasDeDetalles(
   try {
     const supabase = await createClient()
 
-    const updatePromises = detalles.map(detalle =>
-      (supabase)
+    // Usamos un bucle para actualizar cada nota de forma individual y segura
+    for (const detalle of detalles) {
+      const { error } = await supabase
         .from('detalles_orden')
         .update({ notas: detalle.notas })
-        .eq('id', detalle.id)
-    );
+        .eq('id', detalle.id);
 
-    const results = await Promise.all(updatePromises);
-
-    const firstError = results.find(res => res.error);
-    if (firstError) {
-      console.error("Error al actualizar una o más notas de detalle:", firstError.error);
-      throw new Error(firstError.error.message);
+      // Si una actualización falla, detenemos el proceso y devolvemos el error
+      if (error) {
+        console.error(`Error al actualizar la nota para el detalle ID ${detalle.id}:`, error);
+        throw new Error(`Fallo al actualizar la nota. Error: ${error.message}`);
+      }
     }
     
-    revalidatePath("/dashboard/ordenes");
-    revalidatePath("/dashboard/catalogo");
+    revalidatePath("/dashboard/ordenes", "layout");
+    revalidatePath("/dashboard/catalogo", "layout");
 
     return { success: true };
   } catch (error) {

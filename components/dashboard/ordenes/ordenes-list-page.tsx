@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,9 @@ import {
   CreditCard,
 } from "lucide-react"
 import { toast } from "sonner"
-import { obtenerOrdenes, obtenerDetallesOrden, cambiarEstadoOrden, eliminarOrden } from "./ordenes-actions"
+import { obtenerOrdenes, obtenerDetallesOrden, cambiarEstadoOrden, eliminarOrden, actualizarNotasDeDetalles } from "./ordenes-actions"
+import { Label } from "recharts"
+import { Input } from "@/components/ui/input"
 
 interface Cliente {
   id: string
@@ -85,12 +87,13 @@ export default function OrdenesListPage() {
   const [activeTab, setActiveTab] = useState("todas")
   const [selectedOrden, setSelectedOrden] = useState<Orden | null>(null)
   const [detallesOrden, setDetallesOrden] = useState<DetalleOrdenCompleto[]>([])
+  const [editedNotes, setEditedNotes] = useState<Map<string | number, string>>(new Map())
   const [isDetallesOpen, setIsDetallesOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetallesLoading, setIsDetallesLoading] = useState(false)
   const [isChangingStatus, setIsChangingStatus] = useState(false)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
 
   // Cargar órdenes al montar el componente
  useEffect(() => {
@@ -99,21 +102,23 @@ export default function OrdenesListPage() {
     return () => clearInterval(interval)
   }, [])
   // Función para cargar órdenes
- const loadOrdenes = async () => {
-    if (!isLoading) setIsLoading(true);
+  const loadOrdenes = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const data = await obtenerOrdenes()
-      setOrdenes(data || [])
+      // Pide los detalles solo si la vista activa es "cocina"
+      const fetchDetails = activeView === 'cocina';
+      const data = await obtenerOrdenes(fetchDetails);
+      setOrdenes(data || []);
     } catch (error) {
-      console.error("Error al cargar órdenes:", error)
-      toast.error("Error al cargar órdenes.")
-      setOrdenes([])
+      console.error("Error al cargar órdenes:", error);
+      toast.error("Error al cargar órdenes.");
+      setOrdenes([]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  }, [activeView]); // Se ejecuta cuando cambia la vista
   // Función para ver detalles de una orden
-   const handleVerDetalles = async (orden: Orden) => {
+   const handleVerYEditarDetalles = async (orden: Orden) => {
     setSelectedOrden(orden)
     setIsDetallesOpen(true)
     setIsDetallesLoading(true)
@@ -121,13 +126,18 @@ export default function OrdenesListPage() {
     try {
       const detalles = await obtenerDetallesOrden(orden.id)
       setDetallesOrden(detalles)
+      const notesMap = new Map<string | number, string>();
+      detalles.forEach((d: DetalleOrdenCompleto) => {
+        notesMap.set(d.id, d.notas || "");
+      });
+      setEditedNotes(notesMap);
     } catch (error) {
-      console.error("Error al cargar detalles de la orden:", error)
       toast.error("Error al cargar detalles de la orden.")
     } finally {
       setIsDetallesLoading(false)
     }
   }
+
   // Función para cambiar el estado de una orden
   const handleCambiarEstado = async (ordenId: string | number, nuevoEstado: string) => {
     setIsChangingStatus(true)
@@ -146,10 +156,6 @@ export default function OrdenesListPage() {
     } finally {
       setIsChangingStatus(false)
     }
-  }
-   const handleEditOrden = (orden: Orden) => {
-    setSelectedOrden(orden);
-    setIsEditModalOpen(true);
   }
   // Función para eliminar una orden
    const handleEliminarOrden = async () => {
@@ -172,11 +178,35 @@ export default function OrdenesListPage() {
       setIsDeleting(false)
     }
   }
+  const handleNoteChange = (detalleId: string | number, newNote: string) => {
+    setEditedNotes(new Map(editedNotes.set(detalleId, newNote)));
+  };
+   const handleGuardarNotas = async () => {
+    if (!selectedOrden) return;
+    setIsSavingNotes(true);
+    try {
+        const detallesParaActualizar = Array.from(editedNotes.entries()).map(([id, notas]) => ({ id, notas }));
+        const result = await actualizarNotasDeDetalles(detallesParaActualizar);
+
+        if (result.success) {
+            toast.success("Notas de los productos actualizadas.");
+            setIsDetallesOpen(false);
+            loadOrdenes();
+        } else {
+            toast.error(result.error || "No se pudieron guardar las notas.");
+        }
+    } catch(error) {
+        toast.error("Error al guardar las notas.");
+    } finally {
+        setIsSavingNotes(false);
+    }
+  }
+
   const ordenesValidas = Array.isArray(ordenes) ? ordenes : []
-  const filteredOrdenes = ordenesValidas.filter((orden) => activeTab === "todas" || orden.estado === activeTab)
-  const ordenesPendientes = ordenesValidas.filter((orden) => orden.estado === "pendiente")
-  const ordenesEnProceso = ordenesValidas.filter((orden) => orden.estado === "preparando")
-  const ordenesCompletadas = ordenesValidas.filter((orden) => orden.estado === "completada")
+  const filteredOrdenes = ordenesValidas.filter((o) => activeTab === "todas" || o.estado === o.estado)
+  const ordenesPendientes = ordenesValidas.filter((o) => o.estado === "pendiente")
+  const ordenesEnProceso = ordenesValidas.filter((o) => o.estado === "preparando")
+  const ordenesCompletadas = ordenesValidas.filter((o) => o.estado === "completada")
   // Función para obtener el color de la insignia según el estado
  const getBadgeVariant = (estado: string) => {
     switch (estado) {
@@ -219,7 +249,7 @@ export default function OrdenesListPage() {
     return `${Math.floor(diffInMinutes / 60)}h ${diffInMinutes % 60}m`;
   };
   // Componente de tarjeta de orden para vista cocina
- const OrdenCard = ({ orden }: { orden: Orden }) => (
+  const OrdenCard = ({ orden }: { orden: Orden }) => (
     <Card className={`mb-4 transition-all duration-200 hover:shadow-lg ${getStatusCardClass(orden.estado)}`}>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
@@ -237,13 +267,10 @@ export default function OrdenesListPage() {
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="space-y-2 mb-4">
+         <div className="space-y-2 mb-4">
             {Array.isArray(orden.detalles_orden) && orden.detalles_orden.slice(0, 3).map((detalle, index) => (
               <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
-                <div className="flex items-center gap-2">
-                  <Coffee className="h-4 w-4 text-amber-600" />
-                  <span className="font-medium text-sm">{detalle.productos?.nombre || 'Producto'}</span>
-                </div>
+                <div className="flex items-center gap-2"><Coffee className="h-4 w-4 text-amber-600" /><span className="font-medium text-sm">{detalle.productos?.nombre || 'Producto'}</span></div>
                 <Badge variant="secondary" className="text-xs">x{detalle.cantidad}</Badge>
               </div>
             ))}
@@ -272,7 +299,7 @@ export default function OrdenesListPage() {
 
         {/* Botones de acción */}
          <div className="flex gap-2">
-             <Button variant="outline" size="sm" onClick={() => handleVerDetalles(orden)} className="flex-1"><Eye className="h-4 w-4 mr-1" />Ver / Editar</Button>
+             <Button variant="outline" size="sm" onClick={() => handleVerYEditarDetalles(orden)} className="flex-1"><Eye className="h-4 w-4 mr-1" />Ver / Editar Notas</Button>
         </div>
         <div className="flex gap-2 mt-2">
           {orden.estado === "pendiente" && (<Button size="sm" onClick={() => handleCambiarEstado(orden.id, "preparando")} disabled={isChangingStatus} className="flex-1 bg-blue-600 hover:bg-blue-700"><ChefHat className="h-4 w-4 mr-1" />Cocinar</Button>)}
@@ -405,7 +432,7 @@ export default function OrdenesListPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleVerDetalles(orden)}
+                                    onClick={() => handleVerYEditarDetalles(orden)}
                                     className="h-8 px-2"
                                   >
                                     <Eye className="h-4 w-4 mr-1" />
@@ -447,19 +474,6 @@ export default function OrdenesListPage() {
                                       Completar
                                     </Button>
                                   )}
-
-                                  {/* Botones de editar y eliminar */}
-                                  <Button
-                                    variant="outline"
-                                    className="border-amber-200 text-amber-800 hover:bg-amber-50"
-                                    onClick={() => {
-                                      toast.info("Funcionalidad de edición en desarrollo")
-                                    }}
-                                  >
-                                    <Pencil className="h-4 w-4 mr-1" />
-                                    Editar
-                                  </Button>
-
                                   <Button
                                     variant="outline"
                                     className="border-red-200 text-red-800 hover:bg-red-50"
@@ -485,8 +499,9 @@ export default function OrdenesListPage() {
       {/* Modal de Detalles de Orden */}
       <Dialog open={isDetallesOpen} onOpenChange={setIsDetallesOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle className="text-xl font-bold text-amber-900">Detalles de la Orden #{selectedOrden?.id}</DialogTitle></DialogHeader>
-            {isDetallesLoading ? ( <div className="text-center py-8"><RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" /><p>Cargando detalles...</p></div>
+            <DialogHeader><DialogTitle className="text-xl font-bold text-amber-900">Detalles y Notas de la Orden #{selectedOrden?.id}</DialogTitle></DialogHeader>
+            {isDetallesLoading ? (
+                <div className="text-center py-8"><RefreshCw className="h-8 w-8 mx-auto mb-4 animate-spin text-amber-600" /><p>Cargando detalles...</p></div>
             ) : ( 
             <div className="space-y-6">
               {selectedOrden && (
@@ -544,30 +559,33 @@ export default function OrdenesListPage() {
                   </div>
                   {selectedOrden.notas && <div className="border-t pt-4 mt-4"><h3 className="font-medium text-gray-500">Notas Generales de la Orden</h3><p className="text-sm mt-1">{selectedOrden.notas}</p></div>}
                     <div>
-                    <h3 className="font-medium text-gray-500 mb-2">Productos</h3>
-                    {detallesOrden.length === 0 ? (
-                      <div className="text-center py-4 border rounded-md">
-                        <p className="text-gray-500">No se encontraron detalles para esta orden</p>
-                        <p className="text-sm text-amber-600 mt-2">
-                          Información de la orden: Subtotal: ${selectedOrden.subtotal.toFixed(2)}, Total: $
-                          {selectedOrden.total.toFixed(2)}, Puntos ganados: {selectedOrden.puntos_ganados || 0}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="border rounded-md overflow-hidden">
-                         <Table>
-                            <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead className="text-center">Cant.</TableHead><TableHead className="text-right">Precio</TableHead><TableHead className="text-right">Subtotal</TableHead></TableRow></TableHeader>
-                            <TableBody>{detallesOrden.map((d, i) => <TableRow key={d.id || i}>
-                                <TableCell>
-                                    <p className="font-medium">{getProductName(d)}</p>
-                                    {d.notas && <p className="text-xs text-orange-700 flex items-center gap-1"><StickyNote className="h-3 w-3"/>{d.notas}</p>}
-                                </TableCell>
-                                <TableCell className="text-center">{d.cantidad}</TableCell><TableCell className="text-right">${(d.precio_unitario || 0).toFixed(2)}</TableCell><TableCell className="text-right">${(d.subtotal || 0).toFixed(2)}</TableCell>
-                            </TableRow>)}</TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </div>
+                      <h3 className="font-medium text-gray-500 mb-2">Productos y Notas Editables</h3>
+                      {detallesOrden.length === 0 ? <div className="text-center py-4 border rounded-md"><p className="text-gray-500">No se encontraron detalles de productos.</p></div> :
+                        <ScrollArea className="max-h-[300px] pr-4">
+                            <div className="space-y-3">
+                            {detallesOrden.map((d) => (
+                                <div key={d.id} className="p-3 border rounded-md bg-amber-50/50">
+                                    <div className="flex justify-between">
+                                        <p className="font-medium">{getProductName(d)}</p>
+                                        <p className="font-semibold">${(d.subtotal || 0).toFixed(2)}</p>
+                                    </div>
+                                    <p className="text-sm text-gray-500">{d.cantidad} x ${(d.precio_unitario || 0).toFixed(2)}</p>
+                                    <div className="mt-2">
+                                        <Label htmlFor={`nota-${d.id}`} className="text-xs text-gray-600">Nota del producto</Label>
+                                        <Input
+                                            id={`nota-${d.id}`}
+                                            placeholder="Sin notas..."
+                                            value={editedNotes.get(d.id) || ''}
+                                            onChange={(e) => handleNoteChange(d.id, e.target.value)}
+                                            className="text-sm h-8 mt-1 border-amber-200"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                            </div>
+                        </ScrollArea>
+                      }
+                    </div>
                   <div className="space-y-1 border-t pt-4">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
@@ -647,11 +665,12 @@ export default function OrdenesListPage() {
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDetallesOpen(false)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
+           <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4">
+                <Button variant="outline" onClick={() => setIsDetallesOpen(false)} disabled={isSavingNotes}>Cancelar</Button>
+                <Button onClick={handleGuardarNotas} disabled={isSavingNotes} className="bg-amber-700 hover:bg-amber-800">
+                    {isSavingNotes ? "Guardando..." : "Guardar Notas"}
+                </Button>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* Modal de Confirmación de Eliminación */}
