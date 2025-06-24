@@ -271,60 +271,51 @@ export async function eliminarOrden(id: string | number) {
     return { success: false, error: error instanceof Error ? error.message : "Error desconocido" }
   }
 }
+const determinarNivelFidelidad = (puntos: number): string => {
+    if (puntos >= 200) return 'platino';
+    if (puntos >= 100) return 'oro';
+    if (puntos >= 50) return 'plata';
+    return 'bronce';
+}
 
 export async function cambiarEstadoOrden(id: string | number, estado: string) {
   try {
     const supabase = await createClient()
-
     const { error } = await supabase.from("ordenes").update({ estado }).eq("id", id)
+    if (error) throw new Error(error.message)
 
-    if (error) {
-      console.error("Error al cambiar el estado de la orden:", error)
-      throw new Error(error.message)
-    }
-
-    // Si la orden se marca como completada, actualizar puntos del cliente
     if (estado === "completada") {
-      // Obtener la orden
       const { data: ordenData, error: ordenError } = await supabase
         .from("ordenes")
-        .select("id_cliente, total")
+        .select("id_cliente, total, puntos_ganados")
         .eq("id", id)
         .single()
 
-      if (!ordenError && ordenData) {
+      if (!ordenError && ordenData && ordenData.id_cliente) {
         const clienteId = ordenData.id_cliente
-        if (clienteId) {
-          try {
-            const { data: updatedOrdenData, error: updatedOrdenError } = await supabase
-              .from("ordenes")
-              .select("id_cliente, total, puntos_ganados") // Asegurarse de seleccionar puntos_ganados
-              .eq("id", id)
-              .single()
+        const puntosGanados = ordenData.puntos_ganados || Math.floor((ordenData.total || 0) / 5)
 
-            if (!updatedOrdenError && updatedOrdenData) {
-              const puntosGanados = updatedOrdenData.puntos_ganados || Math.floor((updatedOrdenData.total || 0) / 5); // Recalcular si no está presente
+        if (puntosGanados > 0) {
+          const { data: clienteData, error: clienteError } = await supabase
+            .from("clientes")
+            .select("puntos_fidelidad")
+            .eq("id", clienteId)
+            .single()
 
-              if (puntosGanados > 0) {
-                // Obtener puntos actuales del cliente
-                const { data: clienteData, error: clienteError } = await supabase
-                  .from("clientes")
-                  .select("puntos_fidelidad")
-                  .eq("id", clienteId)
-                  .single()
+          if (!clienteError && clienteData) {
+            const puntosActuales = clienteData.puntos_fidelidad || 0
+            const nuevosPuntos = puntosActuales + puntosGanados
+            
+            // --- LÓGICA AÑADIDA ---
+            // 1. Determinamos el nuevo nivel basado en el total de puntos
+            const nuevoNivel = determinarNivelFidelidad(nuevosPuntos);
 
-                if (!clienteError && clienteData) {
-                  const puntosActuales = clienteData.puntos_fidelidad || 0
-                  const nuevosPuntos = puntosActuales + puntosGanados
-
-                  // Actualizar puntos del cliente
-                  await supabase.from("clientes").update({ puntos_fidelidad: nuevosPuntos }).eq("id", clienteId)
-                }
-              }
-            }
-          } catch (error) {
-            console.error("Error al actualizar puntos del cliente:", error)
-            // No lanzamos error para no interrumpir el flujo principal
+            // 2. Actualizamos AMBOS, los puntos y el nivel de fidelidad
+            await supabase.from("clientes").update({ 
+                puntos_fidelidad: nuevosPuntos,
+                nivel_fidelidad: nuevoNivel 
+            }).eq("id", clienteId)
+            // --- FIN DE LA LÓGICA AÑADIDA ---
           }
         }
       }
@@ -338,6 +329,7 @@ export async function cambiarEstadoOrden(id: string | number, estado: string) {
     return { success: false, error: error instanceof Error ? error.message : "Error desconocido" }
   }
 }
+
 
 
 

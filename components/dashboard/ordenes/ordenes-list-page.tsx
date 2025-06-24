@@ -298,10 +298,10 @@ export default function OrdenesListPage() {
       <CardContent className="pt-0">
         {/* Productos */}
         <div className="space-y-2 mb-4">
-          {detallesOrden
-            .filter((d) => d.orden_id === orden.id)
-            .slice(0, 3)
-            .map((detalle, index) => (
+          {(detallesOrden || [])
+              .filter((d) => d.orden_id === orden.id)
+              .slice(0, 3)
+              .map((detalle, index) => (
               <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
                 <div className="flex items-center gap-2">
                   <Coffee className="h-4 w-4 text-amber-600" />
@@ -312,11 +312,11 @@ export default function OrdenesListPage() {
                 </Badge>
               </div>
             ))}
-          {detallesOrden.filter((d) => d.orden_id === orden.id).length > 3 && (
-            <div className="text-xs text-gray-500 text-center">
-              +{detallesOrden.filter((d) => d.orden_id === orden.id).length - 3} productos más
-            </div>
-          )}
+          {(detallesOrden || []).filter((d) => d.orden_id === orden.id).length > 3 && (
+              <div className="text-xs text-gray-500 text-center">
+              +{(detallesOrden || []).filter((d) => d.orden_id === orden.id).length - 3} productos más
+                </div>
+               )}
         </div>
 
         {/* Notas especiales */}
