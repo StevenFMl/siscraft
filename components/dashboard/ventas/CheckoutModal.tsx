@@ -1,53 +1,51 @@
-'use client';
+"use client"
 
-import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useState, useEffect, useMemo } from "react"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Card, CardContent } from "@/components/ui/card"
+import { Coins, CreditCard, Banknote, Gift } from "lucide-react"
+import { toast } from "sonner"
 
-// --- Interfaces (Las mismas que ya tienes) ---
 interface Cliente {
-  id: string;
-  nombre: string;
-  apellido?: string;
-  email?: string;
-  telefono?: string;
-  direccion?: string;
-  ciudad?: string;
-  codigo_postal?: string;
-  puntos_fidelidad?: number;
+  id: string
+  nombre: string
+  apellido: string
+  email: string
+  telefono?: string
+  puntos_fidelidad?: number
 }
 
 interface CartItem {
-    id: string;
-    nombre: string;
-    cantidad: number;
-    precio: number;
-    notas?: string;
+  id: number | string
+  nombre: string
+  precio: number
+  cantidad: number
+  notas?: string
+  puntos_otorgados?: number // CAMBIO: Usar puntos_otorgados
 }
 
-type MetodoPagoType = "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos_recompensa";
-
 interface CheckoutModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  clientes: Cliente[];
-  subtotal: number;
-  // CAMBIO: Recibe `impuesto` y `total` ya calculados desde VentasPage
-  impuesto: number; 
-  total: number;
-  cartItems: CartItem[];
+  isOpen: boolean
+  onClose: () => void
+  clientes: Cliente[]
+  subtotal: number
+  impuesto: number
+  total: number
+  cartItems: CartItem[]
   onProcessSale: (
-    selectedClientId: string,
-    metodoPago: MetodoPagoType,
-    // MODIFICADO: orderData ya no necesita impuestoRate, solo los valores finales
-    ordenData: { subtotal: number; impuestos: number; total: number; },
-    items: CartItem[]
-  ) => void;
-  isProcessing: boolean;
-  // REMOVIDOS: `currentImpuestoRate` y `onImpuestoRateChange` ya no son props aquí
+    clientId: string,
+    paymentMethod: "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos",
+    orderTotals: { subtotal: number; impuestos: number; total: number },
+    currentCartItems: CartItem[],
+  ) => Promise<void>
+  isProcessing: boolean
 }
 
 export default function CheckoutModal({
@@ -55,133 +53,253 @@ export default function CheckoutModal({
   onClose,
   clientes,
   subtotal,
-  impuesto, // Recibido como prop (ya calculado por VentasPage)
-  total,    // Recibido como prop (ya calculado por VentasPage)
+  impuesto,
+  total,
   cartItems,
   onProcessSale,
   isProcessing,
 }: CheckoutModalProps) {
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [metodoPago, setMetodoPago] = useState<MetodoPagoType>("efectivo");
-  // REMOVIDO: `localImpuestoRate` y su `useState` ya no son necesarios aquí
-  // const [localImpuestoRate, setLocalImpuestoRate] = useState<number>(0.13); 
+  const [selectedCliente, setSelectedCliente] = useState<string>("")
+  const [metodoPago, setMetodoPago] = useState<"efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos">("efectivo")
 
+  // CAMBIO: Calcular puntos necesarios usando puntos_otorgados
+  const puntosNecesarios = useMemo(() => {
+    return cartItems.reduce((sum, item) => {
+      const puntosPorItem = item.puntos_otorgados || 0
+      return sum + puntosPorItem * item.cantidad
+    }, 0)
+  }, [cartItems])
+
+  // CAMBIO: Verificar si todos los productos son canjeables usando puntos_otorgados
+  const todosCanjeables = useMemo(() => {
+    return cartItems.length > 0 && cartItems.every((item) => (item.puntos_otorgados || 0) > 0)
+  }, [cartItems])
+
+  // Cliente seleccionado
+  const clienteSeleccionado = useMemo(() => {
+    return clientes.find((c) => c.id === selectedCliente)
+  }, [clientes, selectedCliente])
+
+  // Verificar si el cliente tiene suficientes puntos
+  const puntosDisponibles = clienteSeleccionado?.puntos_fidelidad || 0
+  const puedeUsarPuntos = todosCanjeables && puntosDisponibles >= puntosNecesarios && puntosNecesarios > 0
+
+  // Reset cuando se abre/cierra el modal
   useEffect(() => {
-    // Al abrir el modal, resetea los estados
     if (isOpen) {
-      setSelectedClientId(null);
-      setMetodoPago("efectivo");
-      // REMOVIDO: No es necesario resetear `localImpuestoRate` aquí
+      setSelectedCliente("")
+      setMetodoPago("efectivo")
     }
-  }, [isOpen]);
+  }, [isOpen])
 
-  const handleProcessSale = () => {
-    if (!selectedClientId) {
-      alert("Por favor, selecciona un cliente para continuar."); 
-      return;
+  // Cambiar automáticamente a efectivo si no puede usar puntos
+  useEffect(() => {
+    if (metodoPago === "puntos" && !puedeUsarPuntos) {
+      setMetodoPago("efectivo")
     }
-    
-    // Llama a la función del componente padre (`processOrder` en VentasPage)
-    // CAMBIO: Pasa `impuesto` y `total` directamente como vienen de las props (ya calculados por VentasPage)
-    onProcessSale(
-      selectedClientId,
-      metodoPago,
-      { subtotal, impuestos: impuesto, total: total }, // Pasa los valores finales
-      cartItems
-    );
-  };
+  }, [metodoPago, puedeUsarPuntos])
 
-  // REMOVIDO: `handleImpuestoRateChange` ya no es necesario aquí
-  // const handleImpuestoRateChange = (value: string) => { /* ... */ };
+  const handleProcessSale = async () => {
+    if (!selectedCliente) {
+      toast.error("Por favor selecciona un cliente")
+      return
+    }
+
+    if (metodoPago === "puntos" && !puedeUsarPuntos) {
+      toast.error("No se puede procesar el canje por puntos")
+      return
+    }
+
+    const orderTotals =
+      metodoPago === "puntos" ? { subtotal: 0, impuestos: 0, total: 0 } : { subtotal, impuestos: impuesto, total }
+
+    await onProcessSale(selectedCliente, metodoPago, orderTotals, cartItems)
+  }
+
+  const getPaymentIcon = (method: string) => {
+    switch (method) {
+      case "efectivo":
+        return <Banknote className="h-4 w-4" />
+      case "tarjeta_credito":
+        return <CreditCard className="h-4 w-4" />
+      case "tarjeta_debito":
+        return <CreditCard className="h-4 w-4" />
+      case "puntos":
+        return <Coins className="h-4 w-4" />
+      default:
+        return null
+    }
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-amber-900">Finalizar Venta</DialogTitle>
+          <DialogTitle className="text-xl font-bold text-amber-900 flex items-center gap-2">
+            <Gift className="h-5 w-5" />
+            Finalizar {metodoPago === "puntos" ? "Canje" : "Venta"}
+          </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="cliente">Cliente</Label>
-            <Select value={selectedClientId || undefined} onValueChange={setSelectedClientId}>
-              <SelectTrigger className="border-amber-200">
-                <SelectValue placeholder="Seleccionar cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {clientes && clientes.length > 0 ? (
-                  clientes.map((cliente) => (
-                    // Corregido el acceso a puntos_fidelidad
-                    <SelectItem key={`cliente-${cliente.id}`} value={cliente.id.toString()}>
-                      {cliente.nombre} {cliente.apellido || ""} {cliente.puntos_fidelidad ? `(${cliente.puntos_fidelidad} pts)` : ""}
+
+        <ScrollArea className="max-h-[60vh] pr-4">
+          <div className="space-y-6 py-4">
+            {/* Selección de Cliente */}
+            <div className="space-y-2">
+              <Label htmlFor="cliente">Cliente *</Label>
+              <Select value={selectedCliente} onValueChange={setSelectedCliente}>
+                <SelectTrigger className="border-amber-200">
+                  <SelectValue placeholder="Seleccionar cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientes.map((cliente) => (
+                    <SelectItem key={cliente.id} value={cliente.id}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>
+                          {cliente.nombre} {cliente.apellido}
+                        </span>
+                        <Badge variant="outline" className="ml-2">
+                          {cliente.puntos_fidelidad || 0} pts
+                        </Badge>
+                      </div>
                     </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="no-clientes" disabled>
-                    No hay clientes disponibles
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+                  ))}
+                </SelectContent>
+              </Select>
+              {clienteSeleccionado && (
+                <div className="text-sm text-gray-600 bg-amber-50 p-2 rounded">
+                  <strong>Puntos disponibles:</strong> {puntosDisponibles}
+                </div>
+              )}
+            </div>
 
-          <div className="space-y-2">
-            <Label>Método de Pago</Label>
-            <RadioGroup value={metodoPago} onValueChange={setMetodoPago}>
-              <div key="pago-efectivo" className="flex items-center space-x-2">
-                <RadioGroupItem value="efectivo" id="efectivo" />
-                <Label htmlFor="efectivo">Efectivo</Label>
-              </div>
-              <div key="pago-tarjeta-credito" className="flex items-center space-x-2">
-                <RadioGroupItem value="tarjeta_credito" id="tarjeta_credito" />
-                <Label htmlFor="tarjeta_credito">Tarjeta de Crédito</Label>
-              </div>
-              <div key="pago-tarjeta-debito" className="flex items-center space-x-2">
-                <RadioGroupItem value="tarjeta_debito" id="tarjeta_debito" />
-                <Label htmlFor="tarjeta_debito">Tarjeta de Débito</Label>
-              </div>
-              <div key="pago-puntos" className="flex items-center space-x-2">
-                <RadioGroupItem value="puntos" id="puntos" />
-                <Label htmlFor="puntos">Puntos de Recompensa</Label>
-              </div>
-            </RadioGroup>
-          </div>
+            {/* Método de Pago */}
+            <div className="space-y-3">
+              <Label>Método de Pago</Label>
+              <RadioGroup value={metodoPago} onValueChange={(value: any) => setMetodoPago(value)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="efectivo" id="efectivo" />
+                  <Label htmlFor="efectivo" className="flex items-center gap-2">
+                    {getPaymentIcon("efectivo")}
+                    Efectivo
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="tarjeta_credito" id="tarjeta_credito" />
+                  <Label htmlFor="tarjeta_credito" className="flex items-center gap-2">
+                    {getPaymentIcon("tarjeta_credito")}
+                    Tarjeta de Crédito
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="tarjeta_debito" id="tarjeta_debito" />
+                  <Label htmlFor="tarjeta_debito" className="flex items-center gap-2">
+                    {getPaymentIcon("tarjeta_debito")}
+                    Tarjeta de Débito
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="puntos" id="puntos" disabled={!puedeUsarPuntos} />
+                  <Label htmlFor="puntos" className={`flex items-center gap-2 ${!puedeUsarPuntos ? "opacity-50" : ""}`}>
+                    {getPaymentIcon("puntos")}
+                    Canje por Puntos
+                    {puntosNecesarios > 0 && (
+                      <Badge variant={puedeUsarPuntos ? "default" : "destructive"}>{puntosNecesarios} pts</Badge>
+                    )}
+                  </Label>
+                </div>
+              </RadioGroup>
 
-          {/* REMOVIDO: Selector de Tasa de Impuesto (ahora está en VentasPage) */}
-          
-          <div className="space-y-2 border-t pt-4">
-            <div className="flex justify-between">
-              <span>Subtotal:</span>
-              <span>${subtotal.toFixed(2)}</span>
+              {/* Información sobre el canje por puntos */}
+              {metodoPago === "puntos" && (
+                <Card className="bg-amber-50 border-amber-200">
+                  <CardContent className="p-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Puntos necesarios:</span>
+                        <span className="font-bold text-amber-700">{puntosNecesarios}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span>Puntos disponibles:</span>
+                        <span className={puntosDisponibles >= puntosNecesarios ? "text-green-600" : "text-red-600"}>
+                          {puntosDisponibles}
+                        </span>
+                      </div>
+                      {puntosDisponibles >= puntosNecesarios ? (
+                        <div className="flex justify-between items-center text-green-600">
+                          <span>Puntos restantes:</span>
+                          <span className="font-bold">{puntosDisponibles - puntosNecesarios}</span>
+                        </div>
+                      ) : (
+                        <div className="text-red-600 text-sm">Puntos insuficientes para el canje</div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!todosCanjeables && (
+                <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded">
+                  ⚠️ Algunos productos no son canjeables por puntos
+                </div>
+              )}
             </div>
-            <div className="flex justify-between">
-              {/* Muestra el impuesto que viene de VentasPage */}
-              <span>Impuesto:</span> {/* No se muestra el % aquí ya que el cálculo es externo */}
-              <span>${impuesto.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between font-bold">
-              <span>Total:</span>
-              <span>${total.toFixed(2)}</span>
+
+            {/* Resumen de la orden */}
+            <div className="space-y-2 border-t pt-4">
+              <h3 className="font-medium">Resumen de la orden</h3>
+              {metodoPago === "puntos" ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Tipo de transacción:</span>
+                    <span className="font-bold text-amber-700">Canje por Puntos</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Puntos a descontar:</span>
+                    <span className="font-bold">{puntosNecesarios}</span>
+                  </div>
+                  <div className="flex justify-between text-green-600">
+                    <span>Costo monetario:</span>
+                    <span className="font-bold">$0.00</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Impuestos:</span>
+                    <span>${impuesto.toFixed(2)}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span>${total.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Puntos a ganar:</span>
+                    <span>{Math.floor(total / 5)} pts</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-        <DialogFooter className="flex flex-col sm:flex-row gap-2">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={isProcessing}
-            className="w-full sm:w-auto"
-          >
+        </ScrollArea>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isProcessing}>
             Cancelar
           </Button>
           <Button
-            className="bg-amber-700 hover:bg-amber-800 w-full sm:w-auto"
+            className="bg-amber-700 hover:bg-amber-800"
             onClick={handleProcessSale}
-            disabled={isProcessing || !selectedClientId}
+            disabled={isProcessing || !selectedCliente || (metodoPago === "puntos" && !puedeUsarPuntos)}
           >
-            {isProcessing ? "Procesando..." : "Procesar Venta"}
+            {isProcessing ? "Procesando..." : metodoPago === "puntos" ? "Procesar Canje" : "Procesar Venta"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

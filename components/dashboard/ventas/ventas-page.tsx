@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import type React from "react"
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
@@ -13,117 +13,105 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { crearOrden } from "../ordenes/ordenes-actions"
 import { toast } from "sonner"
 import useSWR from "swr"
 import { obtenerCategorias } from "../categorias/categorias-actions"
 import FacturaFormModal from "../facturas/factura-form-modal"
-import CheckoutModal from "./CheckoutModal" // Asegúrate de que esta ruta sea correcta
+import CheckoutModal from "./CheckoutModal"
 import FacturaViewModal from "../facturas/factura-view-modal"
 
 interface Producto {
-    id: number | string;
-    nombre: string;
-    precio: number;
-    descripcion?: string;
-    categoria: string;
-    categoria_id?: number;
-    categorias?: { id: number; nombre: string; };
-    imagen_url?: string;
-    estado?: string;
-    puntos_otorgados?: number;
-}
-
-interface Categoria {
-    id: number;
-    nombre: string;
-    descripcion?: string;
+  id: number | string
+  nombre: string
+  precio: number
+  descripcion?: string
+  categoria: string
+  categoria_id?: number
+  categorias?: { id: number; nombre: string }
+  imagen_url?: string
+  estado?: string
+  puntos_otorgados?: number // CAMBIO: Este es el campo correcto
 }
 
 interface CartItem extends Producto {
-    cantidad: number;
-    notas?: string;
+  cantidad: number
+  notas?: string
 }
 
 interface Cliente {
-    id: string; // UUID en la base de datos
-    nombre: string;
-    apellido: string;
-    email: string;
-    telefono?: string;
-    fecha_nacimiento?: string;
-    direccion?: string;
-    ciudad?: string;
-    codigo_postal?: string;
-    tipo_documento?: string;
-    numero_documento?: string;
-    puntos_fidelidad?: number;
-    nivel_fidelidad?: string;
-    fecha_registro?: string;
-    activo?: boolean;
+  id: string
+  nombre: string
+  apellido: string
+  email: string
+  telefono?: string
+  fecha_nacimiento?: string
+  direccion?: string
+  ciudad?: string
+  codigo_postal?: string
+  tipo_documento?: string
+  numero_documento?: string
+  puntos_fidelidad?: number
+  nivel_fidelidad?: string
+  fecha_registro?: string
+  activo?: boolean
 }
 
 interface OrdenTemporal {
-  id: number;
-  fecha_orden: string;
-  subtotal: number;
-  impuestos: number;
-  total: number;
-  estado: string;
-  id_cliente: string;
-  impuesto_rate?: number; // Mantenemos esta prop en la interfaz
+  id: number
+  fecha_orden: string
+  subtotal: number
+  impuestos: number
+  total: number
+  estado: string
+  id_cliente: string
+  impuesto_rate?: number
 }
 
 interface VentasPageProps {
   onVentaCompleted?: () => void
 }
 
+// CAMBIO: Actualizar fetchProductos para incluir puntos_otorgados
 const fetchProductos = async () => {
-  try {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from("productos")
-      .select("*, categorias(id, nombre)")
-      .eq("estado", "disponible")
-      .order("nombre")
-
-    if (error) { console.error("Error al obtener productos:", error); throw error; }
-    if (!Array.isArray(data)) { console.error("Los datos de productos no son un array:", data); return []; }
-    return data.map((producto) => ({
-      ...producto,
-      categoria: producto.categoria || (producto.categorias ? producto.categorias.nombre : "Sin categoría"),
-    }))
-  } catch (error) { console.error("Error en fetchProductos:", error); return []; }
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("productos")
+    .select("*, categorias(nombre), puntos_otorgados") // CAMBIO: Agregar puntos_otorgados
+    .eq("estado", "disponible")
+    .order("nombre")
+  if (error) throw error
+  return (data || []).map((p) => ({ ...p, categoria: p.categorias?.nombre || "Sin Categoría" }))
 }
 
 const fetchCategorias = async () => {
   try {
     const categorias = await obtenerCategorias()
-    if (!Array.isArray(categorias)) { console.error("Los datos de categorías no son un array:", categorias); return []; }
+    if (!Array.isArray(categorias)) {
+      console.error("Los datos de categorías no son un array:", categorias)
+      return []
+    }
     return categorias
-  } catch (error) { console.error("Error en fetchCategorias:", error); return []; }
+  } catch (error) {
+    console.error("Error en fetchCategorias:", error)
+    return []
+  }
 }
 
 const fetchClientes = async () => {
-  try {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from("clientes")
-      .select("id, nombre, apellido, email, telefono, direccion, ciudad, codigo_postal, tipo_documento, numero_documento, razon_social, puntos_fidelidad, nivel_fidelidad, fecha_registro, activo")
-      .order("nombre")
-
-    if (error) { console.error("Error al obtener clientes:", error); throw error; }
-    if (!Array.isArray(data)) { console.error("Los datos de clientes no son un array:", data); return []; }
-    return data as Cliente[];
-  } catch (error) { console.error("Error en fetchClientes:", error); return []; }
+  const supabase = createClient()
+  const { data, error } = await supabase.from("clientes").select("*").order("nombre")
+  if (error) throw error
+  return (data as Cliente[]) || []
 }
 
 const extractCategoriesFromProducts = (productos: Producto[]) => {
   if (!Array.isArray(productos) || productos.length === 0) return []
   const categoriesSet = new Set<string>()
   productos.forEach((producto) => {
-    if (producto && producto.categoria) { categoriesSet.add(producto.categoria); }
+    if (producto && producto.categoria) {
+      categoriesSet.add(producto.categoria)
+    }
   })
   return Array.from(categoriesSet).sort()
 }
@@ -136,7 +124,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [activeTab, setActiveTab] = useState("all")
   const [cart, setCart] = useState<CartItem[]>([])
-  
+
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [isFacturaFormOpen, setIsFacturaFormOpen] = useState(false)
   const [orderToInvoice, setOrderToInvoice] = useState<OrdenTemporal | null>(null)
@@ -148,251 +136,365 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [localCategories, setLocalCategories] = useState<string[]>([])
 
-  // AÑADIDO: Estado para la tasa de impuesto seleccionada en el carrito.
-  const [selectedImpuestoRate, setSelectedImpuestoRate] = useState<number>(0.15); // Default 13%
+  const [selectedImpuestoRate, setSelectedImpuestoRate] = useState<number>(0.15)
 
   useEffect(() => {
-    isMounted.current = true;
+    isMounted.current = true
     try {
-      const savedCategories = localStorage.getItem("ventasCategories");
-      if (savedCategories) { setLocalCategories(JSON.parse(savedCategories)); }
-    } catch (error) { console.error("Error al cargar categorías desde localStorage:", error); }
-    return () => { isMounted.current = false; };
-  }, []);
+      const savedCategories = localStorage.getItem("ventasCategories")
+      if (savedCategories) {
+        setLocalCategories(JSON.parse(savedCategories))
+      }
+    } catch (error) {
+      console.error("Error al cargar categorías desde localStorage:", error)
+    }
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
 
   const {
-    data: productos, error: productosError, mutate: mutateProductos, isLoading: isLoadingProductos,
-  } = useSWR("productos", fetchProductos, { revalidateOnFocus: false, revalidateOnReconnect: true, dedupingInterval: 2000, errorRetryCount: 3, errorRetryInterval: 1000, suspense: false, fallbackData: [],
+    data: productos,
+    error: productosError,
+    mutate: mutateProductos,
+    isLoading: isLoadingProductos,
+  } = useSWR("productos", fetchProductos, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: true,
+    dedupingInterval: 2000,
+    errorRetryCount: 3,
+    errorRetryInterval: 1000,
+    suspense: false,
+    fallbackData: [],
     onSuccess: (data) => {
       if (isMounted.current && Array.isArray(data)) {
-        const categoriesFromProducts = extractCategoriesFromProducts(data);
+        const categoriesFromProducts = extractCategoriesFromProducts(data)
         if (categoriesFromProducts.length > 0) {
           setLocalCategories((prev) => {
-            const newCategories = [...new Set([...prev, ...categoriesFromProducts])].sort();
-            try { localStorage.setItem("ventasCategories", JSON.stringify(newCategories)); } catch (error) { console.error("Error al guardar categorías en localStorage:", error); }
-            return newCategories;
-          });
+            const newCategories = [...new Set([...prev, ...categoriesFromProducts])].sort()
+            try {
+              localStorage.setItem("ventasCategories", JSON.stringify(newCategories))
+            } catch (error) {
+              console.error("Error al guardar categorías en localStorage:", error)
+            }
+            return newCategories
+          })
         }
       }
-    }, onError: (error) => { console.error("Error en SWR productos:", error); },
-  });
+    },
+    onError: (error) => {
+      console.error("Error en SWR productos:", error)
+    },
+  })
 
   const {
-    data: categorias, error: categoriasError, mutate: mutateCategorias, isLoading: isLoadingCategorias,
-  } = useSWR("categorias", fetchCategorias, { revalidateOnFocus: false, revalidateOnReconnect: true, dedupingInterval: 2000, errorRetryCount: 3, errorRetryInterval: 1000, suspense: false, fallbackData: [],
+    data: categorias,
+    error: categoriasError,
+    mutate: mutateCategorias,
+    isLoading: isLoadingCategorias,
+  } = useSWR("categorias", fetchCategorias, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: true,
+    dedupingInterval: 2000,
+    errorRetryCount: 3,
+    errorRetryInterval: 1000,
+    suspense: false,
+    fallbackData: [],
     onSuccess: (data) => {
       if (isMounted.current && Array.isArray(data) && data.length > 0) {
-        const categoryNames = data.map((cat) => cat.nombre).filter(Boolean).sort();
+        const categoryNames = data
+          .map((cat) => cat.nombre)
+          .filter(Boolean)
+          .sort()
         if (categoryNames.length > 0) {
           setLocalCategories((prevCats) => {
-            const combined = [...new Set([...prevCats, ...categoryNames])].sort();
-            try { localStorage.setItem("ventasCategories", JSON.stringify(combined)); } catch (error) { console.error("Error al guardar categorías en localStorage:", error); }
-            return combined;
-          });
+            const combined = [...new Set([...prevCats, ...categoryNames])].sort()
+            try {
+              localStorage.setItem("ventasCategories", JSON.stringify(combined))
+            } catch (error) {
+              console.error("Error al guardar categorías en localStorage:", error)
+            }
+            return combined
+          })
         }
       }
-    }, onError: (error) => { console.error("Error en SWR categorías:", error); },
-  });
+    },
+    onError: (error) => {
+      console.error("Error en SWR categorías:", error)
+    },
+  })
 
   const {
-    data: clientes, error: clientesError, mutate: mutateClientes,
-  } = useSWR("clientes", fetchClientes, { revalidateOnFocus: false, revalidateOnReconnect: true, dedupingInterval: 2000, errorRetryCount: 3, fallbackData: [], });
+    data: clientes,
+    error: clientesError,
+    mutate: mutateClientes,
+  } = useSWR("clientes", fetchClientes, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: true,
+    dedupingInterval: 2000,
+    errorRetryCount: 3,
+    fallbackData: [],
+  })
 
   useEffect(() => {
-    if (productosError) { toast.error("Error al cargar productos. Por favor, intenta de nuevo."); }
-    if (categoriasError) { toast.error("Error al cargar categorías. Por favor, intenta de nuevo."); }
-    if (clientesError) { toast.error("Error al cargar clientes. Por favor, intenta de nuevo."); }
-  }, [productosError, categoriasError, clientesError]);
+    if (productosError) {
+      toast.error("Error al cargar productos. Por favor, intenta de nuevo.")
+    }
+    if (categoriasError) {
+      toast.error("Error al cargar categorías. Por favor, intenta de nuevo.")
+    }
+    if (clientesError) {
+      toast.error("Error al cargar clientes. Por favor, intenta de nuevo.")
+    }
+  }, [productosError, categoriasError, clientesError])
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      mutateProductos(); mutateCategorias(); mutateClientes();
-      isFirstLoad.current = false;
+      mutateProductos()
+      mutateCategorias()
+      mutateClientes()
+      isFirstLoad.current = false
     }
-  }, [mutateProductos, mutateCategorias, mutateClientes]);
+  }, [mutateProductos, mutateCategorias, mutateClientes])
 
   const refreshData = useCallback(async () => {
-    setIsRefreshing(true);
-    try { await Promise.all([mutateProductos(), mutateCategorias(), mutateClientes()]); toast.success("Datos actualizados correctamente"); }
-    catch (error) { console.error("Error al refrescar datos:", error); toast.error("Error al actualizar los datos"); }
-    finally { setIsRefreshing(false); }
-  }, [mutateProductos, mutateCategorias, mutateClientes]);
+    setIsRefreshing(true)
+    try {
+      await Promise.all([mutateProductos(), mutateCategorias(), mutateClientes()])
+      toast.success("Datos actualizados correctamente")
+    } catch (error) {
+      console.error("Error al refrescar datos:", error)
+      toast.error("Error al actualizar los datos")
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [mutateProductos, mutateCategorias, mutateClientes])
 
   const categories = useMemo(() => {
-    if (localCategories.length > 0) return localCategories;
-    if (Array.isArray(categorias) && categorias.length > 0) return categorias.map((cat) => cat.nombre).filter(Boolean).sort();
-    if (Array.isArray(productos) && productos.length > 0) return extractCategoriesFromProducts(productos);
-    return [];
-  }, [productos, categorias, localCategories]);
+    if (localCategories.length > 0) return localCategories
+    if (Array.isArray(categorias) && categorias.length > 0)
+      return categorias
+        .map((cat) => cat.nombre)
+        .filter(Boolean)
+        .sort()
+    if (Array.isArray(productos) && productos.length > 0) return extractCategoriesFromProducts(productos)
+    return []
+  }, [productos, categorias, localCategories])
 
   useEffect(() => {
-    setSelectedCategory(activeTab);
-  }, [activeTab]);
+    setSelectedCategory(activeTab)
+  }, [activeTab])
 
   const filteredProductos = useMemo(() => {
-    if (!Array.isArray(productos) || productos.length === 0) return [];
+    if (!Array.isArray(productos) || productos.length === 0) return []
     return productos.filter((producto) => {
-      if (!producto || !producto.nombre) return false;
-      const matchesSearch = producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || (producto.descripcion && producto.descripcion.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesCategory = activeTab === "all" || producto.categoria === activeTab;
-      return matchesSearch && matchesCategory;
-    });
-  }, [productos, searchTerm, activeTab]);
+      if (!producto || !producto.nombre) return false
+      const matchesSearch =
+        producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (producto.descripcion && producto.descripcion.toLowerCase().includes(searchTerm.toLowerCase()))
+      const matchesCategory = activeTab === "all" || producto.categoria === activeTab
+      return matchesSearch && matchesCategory
+    })
+  }, [productos, searchTerm, activeTab])
 
   const addToCart = useCallback((producto: Producto) => {
     setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.id === producto.id);
-      if (existingItem) { return prevCart.map((item) => (item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item)); }
-      else { return [...prevCart, { ...producto, cantidad: 1 }]; }
-    });
-    toast.success(`${producto.nombre} agregado al carrito`);
-  }, []);
+      const existingItem = prevCart.find((item) => item.id === producto.id)
+      if (existingItem) {
+        return prevCart.map((item) => (item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item))
+      } else {
+        return [...prevCart, { ...producto, cantidad: 1 }]
+      }
+    })
+    toast.success(`${producto.nombre} agregado al carrito`)
+  }, [])
 
   const updateCartItemQuantity = useCallback((id: number | string, cantidad: number) => {
-    if (cantidad <= 0) { removeFromCart(id); return; }
-    setCart((prevCart) => prevCart.map((item) => (item.id === id ? { ...item, cantidad } : item)));
-  }, []);
+    if (cantidad <= 0) {
+      removeFromCart(id)
+      return
+    }
+    setCart((prevCart) => prevCart.map((item) => (item.id === id ? { ...item, cantidad } : item)))
+  }, [])
 
   const removeFromCart = useCallback((id: number | string) => {
     setCart((prevCart) => {
-      const itemToRemove = prevCart.find((item) => item.id === id);
-      if (itemToRemove) { toast.info(`${itemToRemove.nombre} eliminado del carrito`); }
-      return prevCart.filter((item) => item.id !== id);
-    });
-  }, []);
+      const itemToRemove = prevCart.find((item) => item.id === id)
+      if (itemToRemove) {
+        toast.info(`${itemToRemove.nombre} eliminado del carrito`)
+      }
+      return prevCart.filter((item) => item.id !== id)
+    })
+  }, [])
 
   const updateCartItemNotes = useCallback((id: number | string, notas: string) => {
-    setCart((prevCart) => prevCart.map((item) => (item.id === id ? { ...item, notas } : item)));
-  }, []);
+    setCart((prevCart) => prevCart.map((item) => (item.id === id ? { ...item, notas } : item)))
+  }, [])
 
   const clearCart = useCallback(() => {
-    setCart([]);
-    toast.info("Carrito limpiado");
-  }, []);
-  // Calcular totales del carrito (siempre actualizados)
-  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0), [cart]);
-  const impuesto = subtotal * selectedImpuestoRate; 
-  const total = subtotal + impuesto;
+    setCart([])
+    toast.info("Carrito limpiado")
+  }, [])
+
+  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0), [cart])
+  const impuesto = subtotal * selectedImpuestoRate
+  const total = subtotal + impuesto
+
   const handleImpuestoRateChange = useCallback((value: string) => {
-    const newRate = parseFloat(value);
+    const newRate = Number.parseFloat(value)
     if (!isNaN(newRate)) {
-      setSelectedImpuestoRate(newRate); // Actualiza la tasa de impuesto seleccionada
+      setSelectedImpuestoRate(newRate)
     }
-  }, []);
+  }, [])
+
   const handleCheckout = useCallback(() => {
     if (cart.length === 0) {
-      toast.error("Carrito vacío. Agrega productos al carrito antes de continuar.");
-      return;
+      toast.error("Carrito vacío. Agrega productos al carrito antes de continuar.")
+      return
     }
-    setIsCheckoutOpen(true);
-  }, [cart.length]);
-  const processOrder = useCallback(async (
-    clientId: string,
-    paymentMethod: "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos_recompensa",
-    // orderTotals ya no necesita impuestoRate porque lo toma de selectedImpuestoRate directamente
-    orderTotals: { subtotal: number; impuestos: number; total: number },
-    currentCartItems: CartItem[]
-  ) => {
-    if (!clientId) {
-      toast.error("Cliente no seleccionado. Por favor, selecciona un cliente para continuar.");
-      return;
-    }
-    setIsProcessing(true); 
-    try {
-      const detallesOrden = currentCartItems.map((item) => {
-        const precio = Number(item.precio) || 0;
-        const cantidad = Number(item.cantidad) || 0;
-        const subtotalDetalle = precio * cantidad;
+    setIsCheckoutOpen(true)
+  }, [cart.length])
 
-        return {
-          producto_id: Number(item.id),
-          cantidad: cantidad,
-          precio_unitario: precio,
-          subtotal: subtotalDetalle,
-          nombre_producto: item.nombre,
-          notas: item.notas || "",
-        };
-      });
-      const ordenResult = await crearOrden({
-        id_cliente: clientId,
-        estado: "pendiente", // O el estado inicial que desees para ventas directas
-        metodo_pago: paymentMethod,
-        detalles: detallesOrden,
-        subtotal: orderTotals.subtotal,
-        impuestos: orderTotals.impuestos,
-        total: orderTotals.total,
-        impuesto_rate: selectedImpuestoRate, // <--- CAMBIO CLAVE 3: PASAR `selectedImpuestoRate` A LA ACCIÓN
-      });
-
-      if (!ordenResult.success || !ordenResult.ordenId) {
-        throw new Error(ordenResult.error || "No se pudo crear la orden.");
+  // CAMBIO: Actualizar processOrder para usar "puntos" en lugar de "puntos_recompensa"
+  const processOrder = useCallback(
+    async (
+      clientId: string,
+      paymentMethod: "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos", // CAMBIO: "puntos" en lugar de "puntos_recompensa"
+      orderTotals: { subtotal: number; impuestos: number; total: number },
+      currentCartItems: CartItem[],
+    ) => {
+      if (!clientId) {
+        toast.error("Cliente no seleccionado. Por favor, selecciona un cliente para continuar.")
+        return
       }
 
-      const clienteSeleccionado = clientes?.find((c) => c.id.toString() === clientId);
+      console.log("🛒 Procesando orden con:", {
+        clientId,
+        paymentMethod,
+        orderTotals,
+        cartItemsCount: currentCartItems.length,
+      })
 
-      if (!clienteSeleccionado) {
-          toast.error("Error: Cliente no encontrado para facturación detallada.");
-          throw new Error("Cliente no encontrado para facturación detallada.");
+      setIsProcessing(true)
+      try {
+        // CAMBIO: Mejorar la preparación de detalles
+        const detallesOrden = currentCartItems.map((item) => {
+          const precio = Number(item.precio) || 0
+          const cantidad = Number(item.cantidad) || 0
+          const subtotalDetalle = precio * cantidad
+
+          return {
+            producto_id: Number(item.id),
+            cantidad: cantidad,
+            precio_unitario: precio,
+            subtotal: subtotalDetalle,
+            notas: item.notas || "",
+          }
+        })
+
+        console.log("📝 Detalles preparados:", detallesOrden)
+
+        const ordenResult = await crearOrden({
+          id_cliente: clientId,
+          estado: paymentMethod === "puntos" ? "completada" : "pendiente", // CAMBIO: Completar inmediatamente si es canje
+          metodo_pago: paymentMethod,
+          detalles: detallesOrden,
+          subtotal: orderTotals.subtotal,
+          impuestos: orderTotals.impuestos,
+          total: orderTotals.total,
+        })
+
+        console.log("📋 Resultado de crear orden:", ordenResult)
+
+        if (!ordenResult.success || !ordenResult.ordenId) {
+          throw new Error(ordenResult.error || "No se pudo crear la orden.")
+        }
+
+        const clienteSeleccionado = clientes?.find((c) => c.id.toString() === clientId)
+
+        if (!clienteSeleccionado) {
+          toast.error("Error: Cliente no encontrado para facturación detallada.")
+          throw new Error("Cliente no encontrado para facturación detallada.")
+        }
+
+        // CAMBIO: Si es canje por puntos, mostrar mensaje de éxito y limpiar carrito
+        if (paymentMethod === "puntos") {
+          toast.success("¡Canje realizado exitosamente!")
+          clearCart()
+          setIsCheckoutOpen(false)
+          if (onVentaCompleted) {
+            onVentaCompleted()
+          }
+          mutateProductos()
+          mutateClientes()
+          return
+        }
+
+        // Para ventas normales, continuar con el flujo de facturación
+        setOrderToInvoice({
+          id: ordenResult.ordenId,
+          fecha_orden: new Date().toISOString(),
+          subtotal: orderTotals.subtotal,
+          impuestos: orderTotals.impuestos,
+          total: orderTotals.total,
+          estado: "pendiente",
+          id_cliente: clientId,
+          impuesto_rate: selectedImpuestoRate,
+        })
+        setClientForInvoice(clienteSeleccionado)
+
+        setIsCheckoutOpen(false)
+        setIsFacturaFormOpen(true)
+      } catch (error) {
+        console.error("Error al procesar la venta:", error)
+        toast.error(`Error al procesar la venta: ${error instanceof Error ? error.message : "Error desconocido"}`)
+      } finally {
+        setIsProcessing(false)
       }
+    },
+    [clientes, cart, selectedImpuestoRate, clearCart, onVentaCompleted, mutateProductos, mutateClientes],
+  )
 
-      setOrderToInvoice({ // Guarda la orden recién creada para pasarla al FacturaFormModal
-        id: ordenResult.ordenId,
-        fecha_orden: new Date().toISOString(),
-        subtotal: orderTotals.subtotal,
-        impuestos: orderTotals.impuestos,
-        total: orderTotals.total,
-        estado: "pendiente",
-        id_cliente: clientId,
-        impuesto_rate: selectedImpuestoRate, // <--- CAMBIO CLAVE 4: PASAR `selectedImpuestoRate` PARA EL MODAL DE FACTURA
-      });
-      setClientForInvoice(clienteSeleccionado);
+  const handleFacturaFormSubmitSuccess = useCallback(
+    (facturaId: number) => {
+      setFacturaIdToView(facturaId)
+      setIsFacturaFormOpen(false)
+      setIsFacturaViewOpen(true)
 
-      setIsCheckoutOpen(false);
-      setIsFacturaFormOpen(true);
+      clearCart()
+      setOrderToInvoice(null)
+      setClientForInvoice(null)
+      setSelectedImpuestoRate(0.15)
 
-    } catch (error) {
-      console.error("Error al procesar la venta:", error);
-      toast.error(`Error al procesar la venta: ${error instanceof Error ? error.message : "Error desconocido"}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [clientes, cart, selectedImpuestoRate]); // <--- AÑADIDO: `selectedImpuestoRate` a las dependencias de `processOrder`
-
-  const handleFacturaFormSubmitSuccess = useCallback((facturaId: number) => {
-    setFacturaIdToView(facturaId);
-    setIsFacturaFormOpen(false);
-    setIsFacturaViewOpen(true);
-
-    clearCart();
-    setOrderToInvoice(null);
-    setClientForInvoice(null);
-    setSelectedImpuestoRate(0.15); // <--- CAMBIO CLAVE 5: Restablecer la tasa de impuesto a 13% por defecto
-    
-    toast.success("Factura creada y lista para visualizar.");
-    if (onVentaCompleted) { onVentaCompleted(); }
-    mutateProductos();
-    mutateClientes();
-  }, [clearCart, onVentaCompleted, mutateProductos, mutateClientes]);
+      toast.success("Factura creada y lista para visualizar.")
+      if (onVentaCompleted) {
+        onVentaCompleted()
+      }
+      mutateProductos()
+      mutateClientes()
+    },
+    [clearCart, onVentaCompleted, mutateProductos, mutateClientes],
+  )
 
   const handleFacturaAnulada = useCallback(() => {
-    toast.info("Factura ha sido anulada.");
-    mutateClientes();
-  }, [mutateClientes]);
+    toast.info("Factura ha sido anulada.")
+    mutateClientes()
+  }, [mutateClientes])
 
   const handleCloseFacturaViewModal = useCallback(() => {
-    setIsFacturaViewOpen(false);
-    setFacturaIdToView(null);
-  }, []);
+    setIsFacturaViewOpen(false)
+    setFacturaIdToView(null)
+  }, [])
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    e.currentTarget.style.display = "none";
-    e.currentTarget.nextElementSibling?.classList.remove("hidden");
-  };
+    e.currentTarget.style.display = "none"
+    e.currentTarget.nextElementSibling?.classList.remove("hidden")
+  }
 
   return (
     <div className="flex flex-col h-full">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 h-full">
-        {/* Productos (sección de la izquierda/superior) */}
+        {/* Productos */}
         <div className="lg:col-span-2">
           <Card className="h-full flex flex-col">
             <CardHeader className="pb-3 flex-shrink-0">
@@ -423,8 +525,8 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                   <Select
                     value={selectedCategory}
                     onValueChange={(value) => {
-                      setSelectedCategory(value);
-                      setActiveTab(value);
+                      setSelectedCategory(value)
+                      setActiveTab(value)
                     }}
                   >
                     <SelectTrigger className="border-amber-200 w-full">
@@ -446,8 +548,8 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
               <Tabs
                 value={activeTab}
                 onValueChange={(value) => {
-                  setActiveTab(value);
-                  setSelectedCategory(value);
+                  setActiveTab(value)
+                  setSelectedCategory(value)
                 }}
                 defaultValue="all"
                 className="h-full flex flex-col"
@@ -517,6 +619,14 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                               <h3 className="font-medium text-sm line-clamp-2">{producto.nombre}</h3>
                               <p className="text-amber-800 font-bold">${producto.precio.toFixed(2)}</p>
                               <p className="text-xs text-gray-500 mt-1">{producto.categoria}</p>
+                              {/* CAMBIO: Mostrar badge de puntos usando puntos_otorgados */}
+                              {producto.puntos_otorgados && producto.puntos_otorgados > 0 && (
+                                <div className="mt-1">
+                                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                    🎁 {producto.puntos_otorgados} pts
+                                  </Badge>
+                                </div>
+                              )}
                             </CardContent>
                             <CardFooter className="p-2 border-t">
                               <Button
@@ -538,7 +648,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
           </Card>
         </div>
 
-        {/* Carrito (sección de la derecha) */}
+        {/* Carrito */}
         <div className="lg:col-span-1">
           <Card className="h-full flex flex-col">
             <CardHeader className="pb-3 flex-shrink-0">
@@ -567,6 +677,15 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                           <div className="flex-1 pr-2">
                             <h3 className="font-medium text-sm line-clamp-2">{item.nombre}</h3>
                             <p className="text-sm text-gray-500">${item.precio.toFixed(2)} c/u</p>
+                            {/* CAMBIO: Mostrar puntos en el carrito */}
+                            {item.puntos_otorgados && item.puntos_otorgados > 0 && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-blue-50 text-blue-700 border-blue-200 mt-1"
+                              >
+                                🎁 {item.puntos_otorgados} pts c/u
+                              </Badge>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
@@ -613,22 +732,20 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
             </CardContent>
             <CardFooter className="flex-shrink-0 border-t pt-4 flex flex-col">
               <div className="w-full space-y-2">
-                {/* AÑADIDO: Selector de Tasa de Impuesto en el Carrito */}
                 <div className="space-y-2">
-                    <Label htmlFor="carrito-impuesto-rate">Tasa de Impuesto</Label>
-                    <Select value={selectedImpuestoRate.toString()} onValueChange={handleImpuestoRateChange}>
-                        <SelectTrigger id="carrito-impuesto-rate" className="border-amber-200">
-                            <SelectValue placeholder="Seleccionar tasa de impuesto" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {/* Opciones de impuesto del 10% (0.10) al 18% (0.18) */}
-                            {[0.10, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18].map(rate => (
-                                <SelectItem key={`carrito-rate-${rate}`} value={rate.toString()}>
-                                    {(rate * 100).toFixed(0)}%
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                  <Label htmlFor="carrito-impuesto-rate">Tasa de Impuesto</Label>
+                  <Select value={selectedImpuestoRate.toString()} onValueChange={handleImpuestoRateChange}>
+                    <SelectTrigger id="carrito-impuesto-rate" className="border-amber-200">
+                      <SelectValue placeholder="Seleccionar tasa de impuesto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18].map((rate) => (
+                        <SelectItem key={`carrito-rate-${rate}`} value={rate.toString()}>
+                          {(rate * 100).toFixed(0)}%
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="flex justify-between text-sm">
@@ -636,8 +753,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  {/* Muestra la tasa de impuesto actual de `selectedImpuestoRate` */}
-                  <span>Impuesto ({ (selectedImpuestoRate * 100).toFixed(0) }%):</span>
+                  <span>Impuesto ({(selectedImpuestoRate * 100).toFixed(0)}%):</span>
                   <span>${impuesto.toFixed(2)}</span>
                 </div>
                 <Separator className="my-2" />
@@ -664,30 +780,28 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
         </div>
       </div>
 
-      {/* 1. Modal de Checkout */}
+      {/* Modal de Checkout */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => {
-          setIsCheckoutOpen(false);
-          setIsProcessing(false);
+          setIsCheckoutOpen(false)
+          setIsProcessing(false)
         }}
         clientes={clientes || []}
         subtotal={subtotal}
-        impuesto={impuesto} // Pasamos el impuesto ya calculado con la tasa seleccionada del carrito
-        total={total}       // Pasamos el total ya calculado con la tasa seleccionada del carrito
+        impuesto={impuesto}
+        total={total}
         cartItems={cart}
         onProcessSale={processOrder}
         isProcessing={isProcessing}
-        // Ya no pasamos currentImpuestoRate ni onImpuestoRateChange a CheckoutModal.
-        // El CheckoutModal solo muestra los totales que le da VentasPage.
       />
 
-      {/* 2. Modal de Creación de Factura */}
+      {/* Modal de Creación de Factura */}
       <FacturaFormModal
         isOpen={isFacturaFormOpen}
         onClose={() => {
-          setIsFacturaFormOpen(false);
-          setIsProcessing(false);
+          setIsFacturaFormOpen(false)
+          setIsProcessing(false)
         }}
         onSuccess={handleFacturaFormSubmitSuccess}
         orden={orderToInvoice}
@@ -695,7 +809,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
         isSubmitting={isProcessing}
       />
 
-      {/* 3. Modal de Visualización de Factura */}
+      {/* Modal de Visualización de Factura */}
       <FacturaViewModal
         isOpen={isFacturaViewOpen}
         onClose={handleCloseFacturaViewModal}

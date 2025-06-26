@@ -100,26 +100,49 @@ export async function crearFactura(data: FacturaData) {
   }
 }
 
-export async function obtenerFacturas() {
+export async function obtenerFacturas(filtroEstado: string = 'todas') {
+  const supabase = createClient()
   try {
-    const supabase = await createClient()
-
-    // Obtener facturas con join a clientes y órdenes
-    const { data, error } = await supabase
+    let query = (await supabase)
       .from("facturas")
       .select(`
-        *,
-        clientes(id, nombre, apellido, email, telefono),
-        ordenes(id, fecha_orden, estado)
+        id,
+        numero_factura,
+        orden_id,
+        fecha_emision,
+        subtotal,
+        impuestos,
+        total,
+        estado,
+        clientes (
+          id,
+          nombre,
+          apellido
+        )
       `)
       .order("fecha_emision", { ascending: false })
 
-    if (error) {
-      console.error("Error al obtener facturas:", error)
-      throw error
+    // Si el filtro no es "todas", se añade la condición a la consulta
+    if (filtroEstado !== 'todas') {
+      query = query.eq('estado', filtroEstado)
     }
 
-    return data || []
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Error al obtener facturas:", error)
+      throw new Error(error.message)
+    }
+
+    // Mapear los datos para incluir el nombre del cliente directamente
+    return (
+      data.map((factura) => ({
+        ...factura,
+        nombre_cliente: factura.clientes
+          ? `${factura.clientes.nombre} ${factura.clientes.apellido || ""}`.trim()
+          : "Cliente General",
+      })) || []
+    )
   } catch (error) {
     console.error("Error inesperado al obtener facturas:", error)
     return []

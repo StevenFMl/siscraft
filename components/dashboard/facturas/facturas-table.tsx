@@ -72,15 +72,18 @@ export function FacturasTable({ facturas, onViewFactura }: FacturasTableProps) {
     }
   }
 
-  const getEstadoBadge = (estado: string) => {
+   const getEstadoBadge = (estado: string) => {
     switch (estado) {
       case "anulada":
         return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Anulada</Badge>
-      default:
+      case "emitida":
         return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Emitida</Badge>
+      default:
+        // Por si queda algún otro estado, lo muestra con el color por defecto
+        return <Badge>{estado}</Badge>
     }
   }
-
+  
   return (
     <div className="space-y-4">
       <div className="flex justify-between">
