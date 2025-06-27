@@ -33,6 +33,123 @@ export async function crearOrden(data: OrdenData) {
 
     const supabase = await createClient()
 
+    // Usar usuario_id si está presente, de lo contrario usar id_cliente
+    const clienteId = data.usuario_id || data.id_cliente
+
+    if (!clienteId) {
+      console.error("❌ No se proporcionó ID de cliente")
+      return { success: false, error: "Se requiere un ID de cliente o usuario" }
+    }
+
+    // ---- LÓGICA PARA PAGO CON PUNTOS ----
+    if (data.metodo_pago === "puntos" || data.metodo_pago === "puntos_recompensa") {
+      console.log("🎁 Procesando canje con puntos...")
+      
+      const productIds = data.detalles.map((d) => d.producto_id)
+      const { data: productosData, error: pError } = await supabase
+        .from("productos")
+        .select("id, puntos_otorgados")
+        .in("id", productIds)
+      
+      if (pError) {
+        console.error("❌ Error al verificar productos para canje:", pError)
+        return { success: false, error: "Error al verificar productos para canje." }
+      }
+
+      const productosMap = new Map(productosData.map((p) => [p.id, p.puntos_otorgados || 0]))
+      const puntosRequeridos = data.detalles.reduce(
+        (sum, d) => sum + (productosMap.get(d.producto_id) ?? 0) * d.cantidad,
+        0,
+      )
+
+      if (puntosRequeridos <= 0) {
+        return { success: false, error: "Los productos seleccionados no son canjeables por puntos." }
+      }
+
+      const { data: cliente, error: cError } = await supabase
+        .from("clientes")
+        .select("puntos_fidelidad")
+        .eq("id", clienteId)
+        .single()
+      
+      if (cError || !cliente) {
+        console.error("❌ Error al encontrar cliente:", cError)
+        return { success: false, error: "No se pudo encontrar al cliente." }
+      }
+      
+      if ((cliente.puntos_fidelidad || 0) < puntosRequeridos) {
+        return { success: false, error: "Puntos insuficientes para realizar el canje." }
+      }
+
+      // Actualizar puntos del cliente
+      const nuevosPuntos = (cliente.puntos_fidelidad || 0) - puntosRequeridos
+      const { error: updateError } = await supabase
+        .from("clientes")
+        .update({ puntos_fidelidad: nuevosPuntos })
+        .eq("id", clienteId)
+      
+      if (updateError) {
+        console.error("❌ Error al actualizar puntos del cliente:", updateError)
+        return { success: false, error: "Error al actualizar los puntos del cliente." }
+      }
+
+      const ordenData = {
+        id_cliente: clienteId,
+        fecha_orden: new Date().toISOString(),
+        estado: data.estado || "pendiente",
+        subtotal: 0,
+        impuestos: 0,
+        total: 0,
+        puntos_ganados: 0,
+        puntos_usados: puntosRequeridos,
+        metodo_pago: data.metodo_pago,
+        notas: data.notas || "Canje de productos con puntos",
+      }
+
+      console.log("📝 Datos de orden de canje a insertar:", ordenData)
+
+      const { data: ordenCreada, error: oError } = await supabase
+        .from("ordenes")
+        .insert([ordenData])
+        .select()
+        .single()
+      
+      if (oError) {
+        console.error("❌ Error al crear orden de canje:", oError)
+        return { success: false, error: oError.message }
+      }
+
+      console.log("✅ Orden de canje creada:", ordenCreada)
+
+      // Crear detalles de la orden
+      const detallesParaInsertar = data.detalles.map((d) => ({
+        orden_id: ordenCreada.id,
+        producto_id: d.producto_id,
+        cantidad: Number(d.cantidad),
+        precio_unitario: 0,
+        subtotal: 0,
+        notas: d.notas || "",
+      }))
+
+      const { error: detallesError } = await supabase
+        .from("detalles_orden")
+        .insert(detallesParaInsertar)
+      
+      if (detallesError) {
+        console.error("❌ Error al crear detalles de canje:", detallesError)
+        // No retornamos error para no interrumpir el flujo
+      } else {
+        console.log("✅ Detalles de canje insertados correctamente")
+      }
+
+      revalidatePath("/dashboard/ventas")
+      revalidatePath("/dashboard/ordenes")
+
+      console.log("🎉 Canje completado exitosamente, ordenId:", ordenCreada.id)
+      return { success: true, ordenId: ordenCreada.id, esCanje: true }
+    }
+
+    // ---- LÓGICA PARA VENTA NORMAL (tu código original) ----
     // Calcular subtotal, impuestos y total de forma explícita si no se proporcionan
     let subtotal = data.subtotal
     let impuestos = data.impuestos
@@ -63,14 +180,7 @@ export async function crearOrden(data: OrdenData) {
 
     console.log("📊 Totales calculados:", { subtotal, impuestos, total, puntos_ganados })
 
-    // Usar usuario_id si está presente, de lo contrario usar id_cliente
-    const clienteId = data.usuario_id || data.id_cliente
-
-    if (!clienteId) {
-      console.error("❌ No se proporcionó ID de cliente")
-      return { success: false, error: "Se requiere un ID de cliente o usuario" }
-    }
-
+   
     // Crear la orden con la estructura correcta y valores explícitos
     const ordenData = {
       id_cliente: clienteId,
@@ -181,7 +291,7 @@ export async function crearOrden(data: OrdenData) {
     revalidatePath("/dashboard/ordenes")
 
     console.log("🎉 Proceso completado exitosamente, ordenId:", ordenId)
-    return { success: true, ordenId }
+    return { success: true, ordenId, esCanje: false }
   } catch (error) {
     console.error("💥 Error inesperado:", error)
     return { success: false, error: error instanceof Error ? error.message : "Error desconocido" }

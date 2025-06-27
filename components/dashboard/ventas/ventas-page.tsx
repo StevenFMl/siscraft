@@ -295,6 +295,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
       return matchesSearch && matchesCategory
     })
   }, [productos, searchTerm, activeTab])
+  
 
   const addToCart = useCallback((producto: Producto) => {
     setCart((prevCart) => {
@@ -384,16 +385,13 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
         // Usar la estructura correcta que espera tu código original
         const ordenResult = await crearOrden({
           usuario_id: clientId, // Tu código original usa usuario_id
-          estado: paymentMethod === "puntos_recompensa" ? "completada" : "pendiente",
-          metodo_pago: paymentMethod === "puntos_recompensa" ? "puntos" : paymentMethod,
-          detalles: detallesOrden,
-          subtotal: orderTotals.subtotal,
-          impuestos: orderTotals.impuestos,
-          total: orderTotals.total,
+          estado: "pendiente", // Se asigna 'pendiente' a TODAS las órdenes nuevas
+         metodo_pago: paymentMethod,
+        detalles: detallesOrden,
+        subtotal: orderTotals.subtotal,
+        impuestos: orderTotals.impuestos,
+        total: orderTotals.total,
         })
-
-        console.log("📋 VentasPage - Resultado de crear orden:", ordenResult)
-
         // Verificar success y ordenId
         if (!ordenResult.success) {
           throw new Error(ordenResult.error || "No se pudo crear la orden.")
@@ -405,16 +403,11 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
 
         const clienteSeleccionado = clientes?.find((c) => c.id.toString() === clientId)
 
-        if (paymentMethod === "puntos_recompensa") {
-          toast.success("¡Canje realizado exitosamente!")
-          clearCart()
-          setIsCheckoutOpen(false)
-          if (onVentaCompleted) onVentaCompleted()
-          mutateProductos()
-          mutateClientes()
-          return
+       if (paymentMethod === 'puntos_recompensa') {
+            toast.success("Canje realizado. La orden está en preparación.");
+        } else {
+            toast.success(`Orden #${ordenResult.ordenId} creada.`);
         }
-
         // Para ventas normales, necesitamos obtener la orden creada para la facturación
         const supabase = createClient()
         const { data: ordenCreada, error: ordenError } = await supabase

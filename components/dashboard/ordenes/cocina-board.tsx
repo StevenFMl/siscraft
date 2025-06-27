@@ -128,15 +128,27 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
     return `Producto #${detalle.producto_id}`;
   };
 
+  // Función para verificar si es un canje de puntos
+  const esCanjePuntos = (orden: OrdenCocina) => {
+    return orden.metodo_pago === "puntos" || orden.total === 0;
+  };
+
   // Componente de tarjeta de orden para la Cocina (más detallado)
   const OrdenCardCocina = ({ orden }: { orden: OrdenCocina }) => (
     <Card
-      className={`mb-4 transition-all duration-200 hover:shadow-lg ${getPriorityColor(orden.fecha_orden || orden.created_at)}`}
+      className={`mb-4 transition-all duration-200 hover:shadow-lg ${getPriorityColor(orden.fecha_orden || orden.created_at)} ${esCanjePuntos(orden) ? 'border-purple-300 bg-purple-50' : ''}`}
     >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div>
-            <CardTitle className="text-lg font-bold text-amber-900">Orden #{orden.id}</CardTitle>
+            <CardTitle className="text-lg font-bold text-amber-900 flex items-center gap-2">
+              Orden #{orden.id}
+              {esCanjePuntos(orden) && (
+                <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs">
+                  CANJE
+                </Badge>
+              )}
+            </CardTitle>
             <div className="flex items-center gap-2 mt-1">
               <User className="h-4 w-4 text-gray-500" />
               <span className="text-sm text-gray-600">
@@ -151,7 +163,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
               <Timer className="h-4 w-4" />
               {getTimeElapsed(orden.fecha_orden || orden.created_at)}
             </div>
-            <div className="text-lg font-bold text-amber-800">${orden.total.toFixed(2)}</div>
+            <div className="text-lg font-bold text-amber-800">
+              {esCanjePuntos(orden) ? "CANJE" : `$${orden.total.toFixed(2)}`}
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -172,10 +186,14 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
                   <TableRow key={detalle.id || `${orden.id}-${detalle.producto_id}`}>
                     <TableCell className="py-2">
                       <p className="font-medium text-sm">{getProductName(detalle)}</p>
-                      {detalle.notas && (
-                        <p className="text-xs text-gray-500 flex items-center">
-                          <StickyNote className="h-3 w-3 mr-1" />{detalle.notas}
-                        </p>
+                      {/* MOSTRAR NOTAS DEL DETALLE - SIEMPRE, incluso en canjes */}
+                      {detalle.notas && detalle.notas.trim() !== "" && (
+                        <div className="mt-1 p-1 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                          <div className="flex items-start gap-1">
+                            <StickyNote className="h-3 w-3 text-yellow-600 mt-0.5 flex-shrink-0" />
+                            <span className="text-yellow-800">{detalle.notas}</span>
+                          </div>
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="text-center py-2">
@@ -193,7 +211,7 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
         )}
 
         {/* Notas especiales de la orden */}
-        {orden.notas && (
+        {orden.notas && orden.notas.trim() !== "" && (
           <div className="mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded">
             <div className="flex items-start gap-2">
               <StickyNote className="h-4 w-4 text-yellow-600 mt-0.5" />
@@ -212,6 +230,8 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
                 ? "Tarjeta de Crédito"
                 : orden.metodo_pago === "tarjeta_debito"
                   ? "Tarjeta de Débito"
+                : orden.metodo_pago === "puntos"
+                  ? "Canje con Puntos"
                   : orden.metodo_pago}
           </span>
         </div>
@@ -223,6 +243,7 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
             Ver Detalles
           </Button>
 
+          {/* Los canjes de puntos normalmente ya están completados, pero si están pendientes: */}
           {orden.estado === "pendiente" && (
             <Button
               size="sm"
@@ -231,7 +252,7 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
               className="flex-1 bg-blue-600 hover:bg-blue-700" // Color azul para "preparando"
             >
               <ChefHat className="h-4 w-4 mr-1" />
-              Cocinar
+              {esCanjePuntos(orden) ? "Preparar" : "Cocinar"}
             </Button>
           )}
 

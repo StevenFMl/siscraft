@@ -218,7 +218,7 @@ export default function CheckoutModal({
                     htmlFor="puntos_recompensa"
                     className={`flex items-center gap-2 ${!puedeUsarPuntos ? "opacity-50" : ""}`}
                   >
-                    {getPaymentIcon("puntos")}
+                    {getPaymentIcon("Puntos")}
                     Canje por Puntos
                     {puntosNecesarios > 0 && (
                       <Badge variant={puedeUsarPuntos ? "default" : "destructive"}>{puntosNecesarios} pts</Badge>
