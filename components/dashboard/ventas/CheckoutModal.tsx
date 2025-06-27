@@ -28,7 +28,7 @@ interface CartItem {
   precio: number
   cantidad: number
   notas?: string
-  puntos_otorgados?: number // CAMBIO: Usar puntos_otorgados
+  puntos_otorgados?: number
 }
 
 interface CheckoutModalProps {
@@ -41,7 +41,7 @@ interface CheckoutModalProps {
   cartItems: CartItem[]
   onProcessSale: (
     clientId: string,
-    paymentMethod: "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos",
+    paymentMethod: "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos_recompensa",
     orderTotals: { subtotal: number; impuestos: number; total: number },
     currentCartItems: CartItem[],
   ) => Promise<void>
@@ -60,9 +60,11 @@ export default function CheckoutModal({
   isProcessing,
 }: CheckoutModalProps) {
   const [selectedCliente, setSelectedCliente] = useState<string>("")
-  const [metodoPago, setMetodoPago] = useState<"efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos">("efectivo")
+  const [metodoPago, setMetodoPago] = useState<"efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos_recompensa">(
+    "efectivo",
+  )
 
-  // CAMBIO: Calcular puntos necesarios usando puntos_otorgados
+  // Calcular puntos necesarios usando puntos_otorgados
   const puntosNecesarios = useMemo(() => {
     return cartItems.reduce((sum, item) => {
       const puntosPorItem = item.puntos_otorgados || 0
@@ -70,7 +72,7 @@ export default function CheckoutModal({
     }, 0)
   }, [cartItems])
 
-  // CAMBIO: Verificar si todos los productos son canjeables usando puntos_otorgados
+  // Verificar si todos los productos son canjeables usando puntos_otorgados
   const todosCanjeables = useMemo(() => {
     return cartItems.length > 0 && cartItems.every((item) => (item.puntos_otorgados || 0) > 0)
   }, [cartItems])
@@ -94,7 +96,7 @@ export default function CheckoutModal({
 
   // Cambiar automáticamente a efectivo si no puede usar puntos
   useEffect(() => {
-    if (metodoPago === "puntos" && !puedeUsarPuntos) {
+    if (metodoPago === "puntos_recompensa" && !puedeUsarPuntos) {
       setMetodoPago("efectivo")
     }
   }, [metodoPago, puedeUsarPuntos])
@@ -105,13 +107,26 @@ export default function CheckoutModal({
       return
     }
 
-    if (metodoPago === "puntos" && !puedeUsarPuntos) {
+    if (metodoPago === "puntos_recompensa" && !puedeUsarPuntos) {
       toast.error("No se puede procesar el canje por puntos")
       return
     }
 
+    console.log("🛒 CheckoutModal - Datos antes de enviar:", {
+      clientId: selectedCliente,
+      paymentMethod: metodoPago,
+      subtotal,
+      impuesto,
+      total,
+      cartItems: cartItems.length,
+    })
+
     const orderTotals =
-      metodoPago === "puntos" ? { subtotal: 0, impuestos: 0, total: 0 } : { subtotal, impuestos: impuesto, total }
+      metodoPago === "puntos_recompensa"
+        ? { subtotal: 0, impuestos: 0, total: 0 }
+        : { subtotal: subtotal, impuestos: impuesto, total: total }
+
+    console.log("📊 CheckoutModal - Totales calculados:", orderTotals)
 
     await onProcessSale(selectedCliente, metodoPago, orderTotals, cartItems)
   }
@@ -137,7 +152,7 @@ export default function CheckoutModal({
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-amber-900 flex items-center gap-2">
             <Gift className="h-5 w-5" />
-            Finalizar {metodoPago === "puntos" ? "Canje" : "Venta"}
+            Finalizar {metodoPago === "puntos_recompensa" ? "Canje" : "Venta"}
           </DialogTitle>
         </DialogHeader>
 
@@ -198,8 +213,11 @@ export default function CheckoutModal({
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="puntos" id="puntos" disabled={!puedeUsarPuntos} />
-                  <Label htmlFor="puntos" className={`flex items-center gap-2 ${!puedeUsarPuntos ? "opacity-50" : ""}`}>
+                  <RadioGroupItem value="puntos_recompensa" id="puntos_recompensa" disabled={!puedeUsarPuntos} />
+                  <Label
+                    htmlFor="puntos_recompensa"
+                    className={`flex items-center gap-2 ${!puedeUsarPuntos ? "opacity-50" : ""}`}
+                  >
                     {getPaymentIcon("puntos")}
                     Canje por Puntos
                     {puntosNecesarios > 0 && (
@@ -210,7 +228,7 @@ export default function CheckoutModal({
               </RadioGroup>
 
               {/* Información sobre el canje por puntos */}
-              {metodoPago === "puntos" && (
+              {metodoPago === "puntos_recompensa" && (
                 <Card className="bg-amber-50 border-amber-200">
                   <CardContent className="p-4">
                     <div className="space-y-2">
@@ -247,7 +265,7 @@ export default function CheckoutModal({
             {/* Resumen de la orden */}
             <div className="space-y-2 border-t pt-4">
               <h3 className="font-medium">Resumen de la orden</h3>
-              {metodoPago === "puntos" ? (
+              {metodoPago === "puntos_recompensa" ? (
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Tipo de transacción:</span>
@@ -294,9 +312,9 @@ export default function CheckoutModal({
           <Button
             className="bg-amber-700 hover:bg-amber-800"
             onClick={handleProcessSale}
-            disabled={isProcessing || !selectedCliente || (metodoPago === "puntos" && !puedeUsarPuntos)}
+            disabled={isProcessing || !selectedCliente || (metodoPago === "puntos_recompensa" && !puedeUsarPuntos)}
           >
-            {isProcessing ? "Procesando..." : metodoPago === "puntos" ? "Procesar Canje" : "Procesar Venta"}
+            {isProcessing ? "Procesando..." : metodoPago === "puntos_recompensa" ? "Procesar Canje" : "Procesar Venta"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -34,7 +34,6 @@ export async function crearFactura(data: FacturaData) {
 
     // Generar número de factura si no se proporciona
     if (!data.numero_factura) {
-      // Obtener el último número de factura
       const { data: ultimaFactura, error: errorUltimaFactura } = await supabase
         .from("facturas")
         .select("numero_factura")
@@ -44,28 +43,22 @@ export async function crearFactura(data: FacturaData) {
 
       let nuevoNumero = 1
       if (!errorUltimaFactura && ultimaFactura && ultimaFactura.numero_factura) {
-        // Extraer el número y aumentarlo en 1
         const ultimoNumero = Number.parseInt(ultimaFactura.numero_factura.replace(/\D/g, ""))
         if (!isNaN(ultimoNumero)) {
           nuevoNumero = ultimoNumero + 1
         }
       }
-
-      // Formatear el nuevo número con ceros a la izquierda
       data.numero_factura = `F-${nuevoNumero.toString().padStart(6, "0")}`
     }
 
-    // Establecer fecha de emisión si no se proporciona
     if (!data.fecha_emision) {
       data.fecha_emision = new Date().toISOString()
     }
 
-    // Establecer estado por defecto
     if (!data.estado) {
       data.estado = "emitida"
     }
 
-    // Insertar la factura en la base de datos
     const { data: facturaCreada, error: facturaError } = await supabase.from("facturas").insert([data]).select()
 
     if (facturaError) {
@@ -80,17 +73,7 @@ export async function crearFactura(data: FacturaData) {
 
     console.log("Factura creada:", facturaCreada[0])
 
-    // Actualizar el estado de la orden a "facturada"
-    const { error: ordenError } = await supabase
-      .from("ordenes")
-      .update({ estado_facturacion: "facturada" })
-      .eq("id", data.orden_id)
-
-    if (ordenError) {
-      console.error("Error al actualizar el estado de la orden:", ordenError)
-      // No lanzamos error para no interrumpir el flujo principal
-    }
-
+ 
     revalidatePath("/dashboard/facturas")
     revalidatePath("/dashboard/ordenes")
     return { success: true, facturaId: facturaCreada[0].id, numeroFactura: facturaCreada[0].numero_factura }

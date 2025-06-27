@@ -31,7 +31,7 @@ interface Producto {
   categorias?: { id: number; nombre: string }
   imagen_url?: string
   estado?: string
-  puntos_otorgados?: number // CAMBIO: Este es el campo correcto
+  puntos_otorgados?: number
 }
 
 interface CartItem extends Producto {
@@ -72,12 +72,11 @@ interface VentasPageProps {
   onVentaCompleted?: () => void
 }
 
-// CAMBIO: Actualizar fetchProductos para incluir puntos_otorgados
 const fetchProductos = async () => {
   const supabase = createClient()
   const { data, error } = await supabase
     .from("productos")
-    .select("*, categorias(nombre), puntos_otorgados") // CAMBIO: Agregar puntos_otorgados
+    .select("*, categorias(nombre), puntos_otorgados")
     .eq("estado", "disponible")
     .order("nombre")
   if (error) throw error
@@ -355,20 +354,14 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
     setIsCheckoutOpen(true)
   }, [cart.length])
 
-  // CAMBIO: Actualizar processOrder para usar "puntos" en lugar de "puntos_recompensa"
   const processOrder = useCallback(
     async (
       clientId: string,
-      paymentMethod: "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos", // CAMBIO: "puntos" en lugar de "puntos_recompensa"
+      paymentMethod: "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos_recompensa",
       orderTotals: { subtotal: number; impuestos: number; total: number },
       currentCartItems: CartItem[],
     ) => {
-      if (!clientId) {
-        toast.error("Cliente no seleccionado. Por favor, selecciona un cliente para continuar.")
-        return
-      }
-
-      console.log("🛒 Procesando orden con:", {
+      console.log("🏪 VentasPage - Recibiendo datos del CheckoutModal:", {
         clientId,
         paymentMethod,
         orderTotals,
@@ -377,82 +370,86 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
 
       setIsProcessing(true)
       try {
-        // CAMBIO: Mejorar la preparación de detalles
-        const detallesOrden = currentCartItems.map((item) => {
-          const precio = Number(item.precio) || 0
-          const cantidad = Number(item.cantidad) || 0
-          const subtotalDetalle = precio * cantidad
+        const detallesOrden = currentCartItems.map((item) => ({
+          producto_id: Number(item.id),
+          cantidad: Number(item.cantidad) || 0,
+          precio_unitario: Number(item.precio) || 0,
+          subtotal: (Number(item.precio) || 0) * (Number(item.cantidad) || 0),
+          notas: item.notas || "",
+        }))
 
-          return {
-            producto_id: Number(item.id),
-            cantidad: cantidad,
-            precio_unitario: precio,
-            subtotal: subtotalDetalle,
-            notas: item.notas || "",
-          }
-        })
+        console.log("📝 VentasPage - Detalles preparados:", detallesOrden)
+        console.log("💰 VentasPage - Totales a enviar:", orderTotals)
 
-        console.log("📝 Detalles preparados:", detallesOrden)
-
+        // Usar la estructura correcta que espera tu código original
         const ordenResult = await crearOrden({
-          id_cliente: clientId,
-          estado: paymentMethod === "puntos" ? "completada" : "pendiente", // CAMBIO: Completar inmediatamente si es canje
-          metodo_pago: paymentMethod,
+          usuario_id: clientId, // Tu código original usa usuario_id
+          estado: paymentMethod === "puntos_recompensa" ? "completada" : "pendiente",
+          metodo_pago: paymentMethod === "puntos_recompensa" ? "puntos" : paymentMethod,
           detalles: detallesOrden,
           subtotal: orderTotals.subtotal,
           impuestos: orderTotals.impuestos,
           total: orderTotals.total,
         })
 
-        console.log("📋 Resultado de crear orden:", ordenResult)
+        console.log("📋 VentasPage - Resultado de crear orden:", ordenResult)
 
-        if (!ordenResult.success || !ordenResult.ordenId) {
+        // Verificar success y ordenId
+        if (!ordenResult.success) {
           throw new Error(ordenResult.error || "No se pudo crear la orden.")
+        }
+
+        if (!ordenResult.ordenId) {
+          throw new Error("No se recibió el ID de la orden creada.")
         }
 
         const clienteSeleccionado = clientes?.find((c) => c.id.toString() === clientId)
 
-        if (!clienteSeleccionado) {
-          toast.error("Error: Cliente no encontrado para facturación detallada.")
-          throw new Error("Cliente no encontrado para facturación detallada.")
-        }
-
-        // CAMBIO: Si es canje por puntos, mostrar mensaje de éxito y limpiar carrito
-        if (paymentMethod === "puntos") {
+        if (paymentMethod === "puntos_recompensa") {
           toast.success("¡Canje realizado exitosamente!")
           clearCart()
           setIsCheckoutOpen(false)
-          if (onVentaCompleted) {
-            onVentaCompleted()
-          }
+          if (onVentaCompleted) onVentaCompleted()
           mutateProductos()
           mutateClientes()
           return
         }
 
-        // Para ventas normales, continuar con el flujo de facturación
-        setOrderToInvoice({
-          id: ordenResult.ordenId,
-          fecha_orden: new Date().toISOString(),
-          subtotal: orderTotals.subtotal,
-          impuestos: orderTotals.impuestos,
-          total: orderTotals.total,
-          estado: "pendiente",
-          id_cliente: clientId,
-          impuesto_rate: selectedImpuestoRate,
-        })
-        setClientForInvoice(clienteSeleccionado)
+        // Para ventas normales, necesitamos obtener la orden creada para la facturación
+        const supabase = createClient()
+        const { data: ordenCreada, error: ordenError } = await supabase
+          .from("ordenes")
+          .select("*, clientes(*)")
+          .eq("id", ordenResult.ordenId)
+          .single()
 
+        if (ordenError || !ordenCreada) {
+          console.error("Error al obtener la orden creada:", ordenError)
+          toast.error("Orden creada pero no se pudo obtener para facturación")
+          return
+        }
+
+        // Para ventas normales, continuar con facturación
+        setOrderToInvoice({
+          id: ordenCreada.id,
+          fecha_orden: ordenCreada.fecha_orden,
+          subtotal: ordenCreada.subtotal,
+          impuestos: ordenCreada.impuestos,
+          total: ordenCreada.total,
+          estado: ordenCreada.estado,
+          id_cliente: clientId,
+        })
+        setClientForInvoice(ordenCreada.clientes || clienteSeleccionado)
         setIsCheckoutOpen(false)
         setIsFacturaFormOpen(true)
       } catch (error) {
-        console.error("Error al procesar la venta:", error)
+        console.error("💥 Error al procesar la venta:", error)
         toast.error(`Error al procesar la venta: ${error instanceof Error ? error.message : "Error desconocido"}`)
       } finally {
         setIsProcessing(false)
       }
     },
-    [clientes, cart, selectedImpuestoRate, clearCart, onVentaCompleted, mutateProductos, mutateClientes],
+    [clientes, clearCart, onVentaCompleted, mutateProductos, mutateClientes],
   )
 
   const handleFacturaFormSubmitSuccess = useCallback(
@@ -505,7 +502,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                   size="sm"
                   onClick={refreshData}
                   disabled={isRefreshing}
-                  className="flex items-center gap-1 w-full sm:w-auto"
+                  className="flex items-center gap-1 w-full sm:w-auto bg-transparent"
                 >
                   <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                   {isRefreshing ? "Actualizando..." : "Actualizar"}
@@ -619,7 +616,6 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                               <h3 className="font-medium text-sm line-clamp-2">{producto.nombre}</h3>
                               <p className="text-amber-800 font-bold">${producto.precio.toFixed(2)}</p>
                               <p className="text-xs text-gray-500 mt-1">{producto.categoria}</p>
-                              {/* CAMBIO: Mostrar badge de puntos usando puntos_otorgados */}
                               {producto.puntos_otorgados && producto.puntos_otorgados > 0 && (
                                 <div className="mt-1">
                                   <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
@@ -677,7 +673,6 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                           <div className="flex-1 pr-2">
                             <h3 className="font-medium text-sm line-clamp-2">{item.nombre}</h3>
                             <p className="text-sm text-gray-500">${item.precio.toFixed(2)} c/u</p>
-                            {/* CAMBIO: Mostrar puntos en el carrito */}
                             {item.puntos_otorgados && item.puntos_otorgados > 0 && (
                               <Badge
                                 variant="outline"
@@ -700,7 +695,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                           <Button
                             variant="outline"
                             size="icon"
-                            className="h-7 w-7"
+                            className="h-7 w-7 bg-transparent"
                             onClick={() => updateCartItemQuantity(item.id, item.cantidad - 1)}
                           >
                             <Minus className="h-3 w-3" />
@@ -709,7 +704,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
                           <Button
                             variant="outline"
                             size="icon"
-                            className="h-7 w-7"
+                            className="h-7 w-7 bg-transparent"
                             onClick={() => updateCartItemQuantity(item.id, item.cantidad + 1)}
                           >
                             <Plus className="h-3 w-3" />
@@ -783,10 +778,7 @@ export default function VentasPage({ onVentaCompleted }: VentasPageProps) {
       {/* Modal de Checkout */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
-        onClose={() => {
-          setIsCheckoutOpen(false)
-          setIsProcessing(false)
-        }}
+        onClose={() => setIsCheckoutOpen(false)}
         clientes={clientes || []}
         subtotal={subtotal}
         impuesto={impuesto}

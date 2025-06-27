@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import useSWR from "swr"
 import {
   Eye,
   RefreshCw,
@@ -81,6 +82,8 @@ interface DetalleOrdenCompleto {
   }
 }
 
+const fetcher = (key: [string, string]) => obtenerOrdenes(key[1] === 'cocina');
+
 export default function OrdenesListPage() {
   const [ordenes, setOrdenes] = useState<Orden[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -96,18 +99,10 @@ export default function OrdenesListPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false);
 
-  // Cargar órdenes al montar el componente
- useEffect(() => {
-    loadOrdenes()
-    const interval = setInterval(loadOrdenes, 30000)
-    return () => clearInterval(interval)
-  }, [])
-  // Función para cargar órdenes
   const loadOrdenes = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Pide los detalles solo si la vista activa es "cocina"
-      const fetchDetails = activeView === 'cocina';
+      const fetchDetails = activeView === 'cocina'; // Solo pide detalles completos para la vista de cocina
       const data = await obtenerOrdenes(fetchDetails);
       setOrdenes(data || []);
     } catch (error) {
@@ -117,7 +112,19 @@ export default function OrdenesListPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeView]); // Se ejecuta cuando cambia la vista
+  }, [activeView]);
+  // Cargar órdenes al montar el componente
+  useEffect(() => {
+    loadOrdenes();
+    const interval = setInterval(() => {
+        if (document.visibilityState === 'visible' && activeView === 'cocina') {
+            loadOrdenes();
+        }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [loadOrdenes, activeView]);
+  // Función para cargar órdenes
+   // Se ejecuta cuando cambia la vista
   // Función para ver detalles de una orden
    const handleVerYEditarDetalles = async (orden: Orden) => {
     setSelectedOrden(orden)
