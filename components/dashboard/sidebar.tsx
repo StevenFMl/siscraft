@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 
-export default function Sidebar() {
+export default function Sidebar({ role }: { role: string | null }) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -17,6 +17,7 @@ export default function Sidebar() {
     await supabase.auth.signOut()
     router.push("/login")
   }
+    const isAdmin = role === 'administrador';
 
   const routes = [
     {
@@ -69,23 +70,31 @@ export default function Sidebar() {
         <span className="text-xl font-bold">Tears And Coffee</span>
       </div>
 
-      {/* Navigation */}
+       {/* Navigation */}
       <nav className="flex-1 pt-4 pb-4 overflow-y-auto">
         <ul className="space-y-1 px-2">
-          {routes.map((route) => (
-            <li key={route.href}>
-              <Link
-                href={route.href}
-                className={cn(
-                  "flex items-center px-4 py-2 text-sm rounded-md transition-colors",
-                  pathname === route.href ? "bg-amber-700 text-white" : "text-amber-100 hover:bg-amber-700/50",
-                )}
-              >
-                <route.icon className="h-5 w-5 mr-3" />
-                {route.name}
-              </Link>
-            </li>
-          ))}
+          {routes.map((route) => {
+            // Si la ruta es 'Usuarios' y el usuario NO es admin, no se muestra
+            if (route.href === "/dashboard/usuarios" && !isAdmin) {
+              return null;
+            }
+
+            // Para todas las demás rutas, o si el usuario es admin, se muestra
+            return (
+              <li key={route.href}>
+                <Link
+                  href={route.href}
+                  className={cn(
+                    "flex items-center px-4 py-2 text-sm rounded-md transition-colors",
+                    pathname === route.href ? "bg-amber-700 text-white" : "text-amber-100 hover:bg-amber-700/50",
+                  )}
+                >
+                  <route.icon className="h-5 w-5 mr-3" />
+                  {route.name}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 

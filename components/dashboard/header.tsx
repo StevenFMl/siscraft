@@ -7,12 +7,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import Sidebar from "./sidebar"
 
-export default function Header({ user }: { user: any }) {
+export default function Header({ user, role }: { user: any, role: string | null }) {
   const [notifications, setNotifications] = useState(3)
 
   const userInitials = user?.email ? user.email.split("@")[0].substring(0, 2).toUpperCase() : "CA"
 
-  return (
+   return (
     <header className="bg-white border-b border-amber-100 py-3 px-4 md:px-6 flex items-center justify-between w-full">
       {/* Mobile Menu - Only visible on mobile */}
       <div className="md:hidden">
@@ -25,7 +25,8 @@ export default function Header({ user }: { user: any }) {
           </SheetTrigger>
           <SheetContent side="left" className="p-0 bg-amber-800 text-amber-50">
             <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
-            <Sidebar />
+            {/* Pasar el rol al Sidebar aquí también */}
+            <Sidebar role={role} />
           </SheetContent>
         </Sheet>
       </div>
