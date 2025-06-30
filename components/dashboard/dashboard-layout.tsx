@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 import type React from "react";
 
@@ -73,17 +73,16 @@ export default function DashboardLayout({
     );
   }
 
-  return (
+   return (
     <div className="flex h-screen bg-amber-50">
       <aside className="hidden md:block md:w-64 md:h-screen md:flex-shrink-0 md:overflow-y-auto">
         <Sidebar role={role} />
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={user} role={role} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
       </div>
     </div>
-  );
+  )
 }

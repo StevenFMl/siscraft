@@ -2,147 +2,83 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/utils/supabase/client"
-import { RewardsTable } from "@/components/dashboard/recompensas/rewards-table"
 import { CustomerLoyalty } from "@/components/dashboard/recompensas/customer-loyalty"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Award } from "lucide-react"
+
+// Se define la interfaz para el cliente, coincidiendo con los datos que se obtendrán.
+interface LoyalCustomer {
+  id: number;
+  name: string;
+  email: string;
+  loyalty_points: number;
+}
 
 export default function RecompensasPage() {
-  const [rewards, setRewards] = useState([])
-  const [customers, setCustomers] = useState([])
+  const [customers, setCustomers] = useState<LoyalCustomer[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function fetchRewardsData() {
+    async function fetchLoyaltyData() {
       const supabase = createClient()
       try {
-        // Fetch rewards
-        const { data: rewardsData, error: rewardsError } = await supabase
-          .from("rewards")
-          .select("*")
-          .order("created_at", { ascending: false })
-
-        if (!rewardsError) {
-          setRewards(rewardsData || [])
-        }
-
-        // Fetch top customers
+        // Consulta corregida para obtener los clientes más leales
         const { data: customersData, error: customersError } = await supabase
-          .from("profiles")
-          .select("*")
-          .order("created_at", { ascending: false })
+          .from("clientes") // Se consulta la tabla correcta: 'clientes'
+          .select("id, nombre, apellido, email, puntos_fidelidad")
+          .order("puntos_fidelidad", { ascending: false }) // Se ordena por puntos descendente
           .limit(10)
 
-        if (!customersError) {
-          setCustomers(customersData || [])
+        if (customersError) {
+          throw customersError;
+        }
+
+        if (customersData) {
+          // Se formatean los datos para que coincidan con la interfaz LoyalCustomer
+          const formattedCustomers = customersData.map(c => ({
+            id: c.id,
+            name: `${c.nombre} ${c.apellido || ''}`.trim(),
+            email: c.email || 'No disponible',
+            loyalty_points: c.puntos_fidelidad || 0,
+          }));
+          setCustomers(formattedCustomers)
         }
       } catch (error) {
-        console.error("Error fetching rewards data:", error)
+        console.error("Error fetching loyalty data:", error)
+        // En caso de error, se puede establecer un array vacío
+        setCustomers([]);
       } finally {
         setLoading(false)
       }
     }
 
-    fetchRewardsData()
-  }, [])
-
-  // Mock data in case the tables don't exist
-  const mockRewards = rewards.length
-    ? rewards
-    : [
-        {
-          id: 1,
-          name: "Café gratis",
-          description: "Un café americano o espresso gratis",
-          points_required: 50,
-          status: "Activo",
-        },
-        { id: 2, name: "Postre gratis", description: "Un postre a elegir", points_required: 100, status: "Activo" },
-        {
-          id: 3,
-          name: "10% de descuento",
-          description: "Descuento en tu próxima compra",
-          points_required: 150,
-          status: "Activo",
-        },
-        {
-          id: 4,
-          name: "Bebida de especialidad",
-          description: "Una bebida de especialidad gratis",
-          points_required: 200,
-          status: "Activo",
-        },
-        {
-          id: 5,
-          name: "Desayuno completo",
-          description: "Un desayuno completo para dos personas",
-          points_required: 500,
-          status: "Activo",
-        },
-      ]
-
-  const mockCustomers = customers.length
-    ? customers
-    : [
-        { id: 1, name: "María García", email: "maria@ejemplo.com", loyalty_points: 450, total_spent: 8500, visits: 32 },
-        { id: 2, name: "Juan Pérez", email: "juan@ejemplo.com", loyalty_points: 320, total_spent: 6200, visits: 25 },
-        { id: 3, name: "Ana López", email: "ana@ejemplo.com", loyalty_points: 280, total_spent: 5400, visits: 22 },
-        {
-          id: 4,
-          name: "Carlos Rodríguez",
-          email: "carlos@ejemplo.com",
-          loyalty_points: 210,
-          total_spent: 4100,
-          visits: 18,
-        },
-        {
-          id: 5,
-          name: "Laura Martínez",
-          email: "laura@ejemplo.com",
-          loyalty_points: 180,
-          total_spent: 3600,
-          visits: 15,
-        },
-      ]
+    fetchLoyaltyData()
+  }, []) // El array de dependencias vacío asegura que se ejecute solo una vez al montar el componente.
 
   if (loading) {
-    return <div>Cargando datos de recompensas...</div>
+    return <div>Cargando datos de lealtad...</div>
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-amber-900">Programa de Recompensas</h1>
+      <h1 className="text-3xl font-bold text-amber-900">Programa de Lealtad</h1>
 
-      <Tabs defaultValue="rewards">
-        <TabsList>
-          <TabsTrigger value="rewards">Recompensas</TabsTrigger>
-          <TabsTrigger value="customers">Clientes Leales</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="rewards" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-amber-800">Gestión de Recompensas</CardTitle>
-              <CardDescription>Configura las recompensas disponibles para tus clientes</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RewardsTable rewards={mockRewards} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="customers" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-amber-800">Clientes con Mayor Lealtad</CardTitle>
-              <CardDescription>Los clientes que han acumulado más puntos en tu programa de lealtad</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CustomerLoyalty customers={mockCustomers} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Se muestra directamente la tarjeta de Clientes Leales, sin pestañas */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-amber-800 flex items-center">
+            <Award className="h-5 w-5 mr-2" />
+            Clientes con Mayor Lealtad
+          </CardTitle>
+          <CardDescription>
+            Un vistazo a los clientes que más interactúan con tu programa.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* El componente CustomerLoyalty ahora recibe la lista de clientes formateada */}
+          <CustomerLoyalty customers={customers} />
+        </CardContent>
+      </Card>
     </div>
   )
 }
