@@ -1,15 +1,35 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react" // Aseguramos que useEffect esté importado
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Clock, ChefHat, CheckCircle, Eye, Timer, Coffee, User, CreditCard, StickyNote, LayoutGrid, List, RefreshCw } from "lucide-react"
-import { toast } from "sonner"
-import { cambiarEstadoOrden } from "../ordenes/ordenes-actions" // Asegúrate de la ruta correcta
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState, useEffect } from "react"; // Aseguramos que useEffect esté importado
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Clock,
+  ChefHat,
+  CheckCircle,
+  Eye,
+  Timer,
+  Coffee,
+  User,
+  CreditCard,
+  StickyNote,
+  LayoutGrid,
+  List,
+  RefreshCw,
+} from "lucide-react";
+import { toast } from "sonner";
+import { cambiarEstadoOrden } from "../ordenes/ordenes-actions"; // Asegúrate de la ruta correcta
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // --- Interfaces (Las mismas que ya tienes) ---
 interface ProductoDetalleOrden {
@@ -57,18 +77,30 @@ interface CocinaBoardProps {
   onRefresh: () => void;
 }
 
-
-export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProps) {
+export function CocinaBoard({
+  ordenes,
+  onViewOrden,
+  onRefresh,
+}: CocinaBoardProps) {
   const [isChangingStatus, setIsChangingStatus] = useState(false);
 
   // Filtrar órdenes por estado para la vista de cocina
-  const ordenesPendientes = ordenes.filter((orden) => orden.estado === "pendiente");
+  const ordenesPendientes = ordenes.filter(
+    (orden) => orden.estado === "pendiente"
+  );
   // Aquí usamos "preparando" consistentemente
-  const ordenesEnProceso = ordenes.filter((orden) => orden.estado === "preparando");
-  const ordenesCompletadas = ordenes.filter((orden) => orden.estado === "completada");
+  const ordenesEnProceso = ordenes.filter(
+    (orden) => orden.estado === "preparando"
+  );
+  const ordenesCompletadas = ordenes.filter(
+    (orden) => orden.estado === "completada"
+  );
 
   // Función para cambiar estado de orden
-  const handleCambiarEstado = async (ordenId: string | number, nuevoEstado: string) => {
+  const handleCambiarEstado = async (
+    ordenId: string | number,
+    nuevoEstado: string
+  ) => {
     setIsChangingStatus(true);
     try {
       const result = await cambiarEstadoOrden(ordenId, nuevoEstado);
@@ -81,7 +113,11 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
       }
     } catch (error) {
       console.error("Error al cambiar el estado de la orden:", error);
-      toast.error(`Error al cambiar el estado de la orden: ${error instanceof Error ? error.message : "Error desconocido"}`);
+      toast.error(
+        `Error al cambiar el estado de la orden: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`
+      );
     } finally {
       setIsChangingStatus(false);
     }
@@ -91,7 +127,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
   const getTimeElapsed = (fechaOrden: string) => {
     const now = new Date();
     const orderTime = new Date(fechaOrden);
-    const diffInMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60));
+    const diffInMinutes = Math.floor(
+      (now.getTime() - orderTime.getTime()) / (1000 * 60)
+    );
 
     if (isNaN(diffInMinutes)) return "Fecha inválida";
 
@@ -110,7 +148,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
     if (isNaN(orderTime.getTime())) return "border-gray-300 bg-gray-50";
 
     const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60));
+    const diffInMinutes = Math.floor(
+      (now.getTime() - orderTime.getTime()) / (1000 * 60)
+    );
 
     if (diffInMinutes > 30) return "border-red-500 bg-red-50";
     if (diffInMinutes > 15) return "border-yellow-500 bg-yellow-50";
@@ -136,7 +176,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
   // Componente de tarjeta de orden para la Cocina (más detallado)
   const OrdenCardCocina = ({ orden }: { orden: OrdenCocina }) => (
     <Card
-      className={`mb-4 transition-all duration-200 hover:shadow-lg ${getPriorityColor(orden.fecha_orden || orden.created_at)} ${esCanjePuntos(orden) ? 'border-purple-300 bg-purple-50' : ''}`}
+      className={`mb-4 transition-all duration-200 hover:shadow-lg ${getPriorityColor(
+        orden.fecha_orden || orden.created_at
+      )} ${esCanjePuntos(orden) ? "border-purple-300 bg-purple-50" : ""}`}
     >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
@@ -144,7 +186,10 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
             <CardTitle className="text-lg font-bold text-amber-900 flex items-center gap-2">
               Orden #{orden.id}
               {esCanjePuntos(orden) && (
-                <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs">
+                <Badge
+                  variant="secondary"
+                  className="bg-purple-100 text-purple-800 text-xs"
+                >
                   CANJE
                 </Badge>
               )}
@@ -183,15 +228,21 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
               </TableHeader>
               <TableBody>
                 {orden.detalles_orden.map((detalle) => (
-                  <TableRow key={detalle.id || `${orden.id}-${detalle.producto_id}`}>
+                  <TableRow
+                    key={detalle.id || `${orden.id}-${detalle.producto_id}`}
+                  >
                     <TableCell className="py-2">
-                      <p className="font-medium text-sm">{getProductName(detalle)}</p>
+                      <p className="font-medium text-sm">
+                        {getProductName(detalle)}
+                      </p>
                       {/* MOSTRAR NOTAS DEL DETALLE - SIEMPRE, incluso en canjes */}
                       {detalle.notas && detalle.notas.trim() !== "" && (
                         <div className="mt-1 p-1 bg-yellow-50 border border-yellow-200 rounded text-xs">
                           <div className="flex items-start gap-1">
                             <StickyNote className="h-3 w-3 text-yellow-600 mt-0.5 flex-shrink-0" />
-                            <span className="text-yellow-800">{detalle.notas}</span>
+                            <span className="text-yellow-800">
+                              {detalle.notas}
+                            </span>
                           </div>
                         </div>
                       )}
@@ -207,7 +258,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
             </Table>
           </div>
         ) : (
-          <div className="text-center text-gray-500 text-sm mb-4">No hay productos en esta orden.</div>
+          <div className="text-center text-gray-500 text-sm mb-4">
+            No hay productos en esta orden.
+          </div>
         )}
 
         {/* Notas especiales de la orden */}
@@ -227,18 +280,23 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
             {orden.metodo_pago === "efectivo"
               ? "Efectivo"
               : orden.metodo_pago === "tarjeta_credito"
-                ? "Tarjeta de Crédito"
-                : orden.metodo_pago === "tarjeta_debito"
-                  ? "Tarjeta de Débito"
-                : orden.metodo_pago === "puntos"
-                  ? "Canje con Puntos"
-                  : orden.metodo_pago}
+              ? "Tarjeta de Crédito"
+              : orden.metodo_pago === "tarjeta_debito"
+              ? "Tarjeta de Débito"
+              : orden.metodo_pago === "puntos"
+              ? "Canje con Puntos"
+              : orden.metodo_pago}
           </span>
         </div>
 
         {/* Botones de acción */}
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => onViewOrden(orden)} className="flex-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onViewOrden(orden)}
+            className="flex-1"
+          >
             <Eye className="h-4 w-4 mr-1" />
             Ver Detalles
           </Button>
@@ -284,7 +342,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
         <div className="space-y-4">
           <div className="flex items-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <Clock className="h-5 w-5 text-yellow-600" />
-            <h3 className="font-bold text-yellow-800">Pendientes ({ordenesPendientes.length})</h3>
+            <h3 className="font-bold text-yellow-800">
+              Pendientes ({ordenesPendientes.length})
+            </h3>
           </div>
           <ScrollArea className="h-[600px]">
             {ordenesPendientes.length === 0 ? (
@@ -293,7 +353,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
                 <p>No hay órdenes pendientes</p>
               </div>
             ) : (
-              ordenesPendientes.map((orden) => <OrdenCardCocina key={orden.id} orden={orden} />)
+              ordenesPendientes.map((orden) => (
+                <OrdenCardCocina key={orden.id} orden={orden} />
+              ))
             )}
           </ScrollArea>
         </div>
@@ -302,7 +364,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
         <div className="space-y-4">
           <div className="flex items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <ChefHat className="h-5 w-5 text-blue-600" />
-            <h3 className="font-bold text-blue-800">En Cocina ({ordenesEnProceso.length})</h3>
+            <h3 className="font-bold text-blue-800">
+              En Cocina ({ordenesEnProceso.length})
+            </h3>
           </div>
           <ScrollArea className="h-[600px]">
             {ordenesEnProceso.length === 0 ? (
@@ -311,7 +375,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
                 <p>No hay órdenes en cocina</p>
               </div>
             ) : (
-              ordenesEnProceso.map((orden) => <OrdenCardCocina key={orden.id} orden={orden} />)
+              ordenesEnProceso.map((orden) => (
+                <OrdenCardCocina key={orden.id} orden={orden} />
+              ))
             )}
           </ScrollArea>
         </div>
@@ -320,7 +386,9 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
         <div className="space-y-4">
           <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 rounded-lg">
             <CheckCircle className="h-5 w-5 text-green-600" />
-            <h3 className="font-bold text-green-800">Listas ({ordenesCompletadas.length})</h3>
+            <h3 className="font-bold text-green-800">
+              Listas ({ordenesCompletadas.length})
+            </h3>
           </div>
           <ScrollArea className="h-[600px]">
             {ordenesCompletadas.length === 0 ? (
@@ -329,7 +397,11 @@ export function CocinaBoard({ ordenes, onViewOrden, onRefresh }: CocinaBoardProp
                 <p>No hay órdenes completadas</p>
               </div>
             ) : (
-              ordenesCompletadas.slice(0, 10).map((orden) => <OrdenCardCocina key={orden.id} orden={orden} />)
+              ordenesCompletadas
+                .slice(0, 10)
+                .map((orden) => (
+                  <OrdenCardCocina key={orden.id} orden={orden} />
+                ))
             )}
           </ScrollArea>
         </div>

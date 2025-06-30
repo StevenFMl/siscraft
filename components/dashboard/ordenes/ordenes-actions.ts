@@ -44,13 +44,13 @@ export async function crearOrden(data: OrdenData) {
     // ---- LÓGICA PARA PAGO CON PUNTOS ----
     if (data.metodo_pago === "puntos" || data.metodo_pago === "puntos_recompensa") {
       console.log("🎁 Procesando canje con puntos...")
-      
+
       const productIds = data.detalles.map((d) => d.producto_id)
       const { data: productosData, error: pError } = await supabase
         .from("productos")
         .select("id, puntos_otorgados")
         .in("id", productIds)
-      
+
       if (pError) {
         console.error("❌ Error al verificar productos para canje:", pError)
         return { success: false, error: "Error al verificar productos para canje." }
@@ -71,12 +71,12 @@ export async function crearOrden(data: OrdenData) {
         .select("puntos_fidelidad")
         .eq("id", clienteId)
         .single()
-      
+
       if (cError || !cliente) {
         console.error("❌ Error al encontrar cliente:", cError)
         return { success: false, error: "No se pudo encontrar al cliente." }
       }
-      
+
       if ((cliente.puntos_fidelidad || 0) < puntosRequeridos) {
         return { success: false, error: "Puntos insuficientes para realizar el canje." }
       }
@@ -87,7 +87,7 @@ export async function crearOrden(data: OrdenData) {
         .from("clientes")
         .update({ puntos_fidelidad: nuevosPuntos })
         .eq("id", clienteId)
-      
+
       if (updateError) {
         console.error("❌ Error al actualizar puntos del cliente:", updateError)
         return { success: false, error: "Error al actualizar los puntos del cliente." }
@@ -113,7 +113,7 @@ export async function crearOrden(data: OrdenData) {
         .insert([ordenData])
         .select()
         .single()
-      
+
       if (oError) {
         console.error("❌ Error al crear orden de canje:", oError)
         return { success: false, error: oError.message }
@@ -134,7 +134,7 @@ export async function crearOrden(data: OrdenData) {
       const { error: detallesError } = await supabase
         .from("detalles_orden")
         .insert(detallesParaInsertar)
-      
+
       if (detallesError) {
         console.error("❌ Error al crear detalles de canje:", detallesError)
         // No retornamos error para no interrumpir el flujo
@@ -180,7 +180,7 @@ export async function crearOrden(data: OrdenData) {
 
     console.log("📊 Totales calculados:", { subtotal, impuestos, total, puntos_ganados })
 
-   
+
     // Crear la orden con la estructura correcta y valores explícitos
     const ordenData = {
       id_cliente: clienteId,

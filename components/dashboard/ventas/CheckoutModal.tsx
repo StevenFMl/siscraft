@@ -1,51 +1,67 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useMemo } from "react"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Card, CardContent } from "@/components/ui/card"
-import { Coins, CreditCard, Banknote, Gift } from "lucide-react"
-import { toast } from "sonner"
+import { useState, useEffect, useMemo } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent } from "@/components/ui/card";
+import { Coins, CreditCard, Banknote, Gift } from "lucide-react";
+import { toast } from "sonner";
 
 interface Cliente {
-  id: string
-  nombre: string
-  apellido: string
-  email: string
-  telefono?: string
-  puntos_fidelidad?: number
+  id: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono?: string;
+  puntos_fidelidad?: number;
 }
 
 interface CartItem {
-  id: number | string
-  nombre: string
-  precio: number
-  cantidad: number
-  notas?: string
-  puntos_otorgados?: number
+  id: number | string;
+  nombre: string;
+  precio: number;
+  cantidad: number;
+  notas?: string;
+  puntos_otorgados?: number;
 }
 
 interface CheckoutModalProps {
-  isOpen: boolean
-  onClose: () => void
-  clientes: Cliente[]
-  subtotal: number
-  impuesto: number
-  total: number
-  cartItems: CartItem[]
+  isOpen: boolean;
+  onClose: () => void;
+  clientes: Cliente[];
+  subtotal: number;
+  impuesto: number;
+  total: number;
+  cartItems: CartItem[];
   onProcessSale: (
     clientId: string,
-    paymentMethod: "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos_recompensa",
+    paymentMethod:
+      | "efectivo"
+      | "tarjeta_credito"
+      | "tarjeta_debito"
+      | "puntos_recompensa",
     orderTotals: { subtotal: number; impuestos: number; total: number },
-    currentCartItems: CartItem[],
-  ) => Promise<void>
-  isProcessing: boolean
+    currentCartItems: CartItem[]
+  ) => Promise<void>;
+  isProcessing: boolean;
 }
 
 export default function CheckoutModal({
@@ -59,57 +75,63 @@ export default function CheckoutModal({
   onProcessSale,
   isProcessing,
 }: CheckoutModalProps) {
-  const [selectedCliente, setSelectedCliente] = useState<string>("")
-  const [metodoPago, setMetodoPago] = useState<"efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos_recompensa">(
-    "efectivo",
-  )
+  const [selectedCliente, setSelectedCliente] = useState<string>("");
+  const [metodoPago, setMetodoPago] = useState<
+    "efectivo" | "tarjeta_credito" | "tarjeta_debito" | "puntos_recompensa"
+  >("efectivo");
 
   // Calcular puntos necesarios usando puntos_otorgados
   const puntosNecesarios = useMemo(() => {
     return cartItems.reduce((sum, item) => {
-      const puntosPorItem = item.puntos_otorgados || 0
-      return sum + puntosPorItem * item.cantidad
-    }, 0)
-  }, [cartItems])
+      const puntosPorItem = item.puntos_otorgados || 0;
+      return sum + puntosPorItem * item.cantidad;
+    }, 0);
+  }, [cartItems]);
 
   // Verificar si todos los productos son canjeables usando puntos_otorgados
   const todosCanjeables = useMemo(() => {
-    return cartItems.length > 0 && cartItems.every((item) => (item.puntos_otorgados || 0) > 0)
-  }, [cartItems])
+    return (
+      cartItems.length > 0 &&
+      cartItems.every((item) => (item.puntos_otorgados || 0) > 0)
+    );
+  }, [cartItems]);
 
   // Cliente seleccionado
   const clienteSeleccionado = useMemo(() => {
-    return clientes.find((c) => c.id === selectedCliente)
-  }, [clientes, selectedCliente])
+    return clientes.find((c) => c.id === selectedCliente);
+  }, [clientes, selectedCliente]);
 
   // Verificar si el cliente tiene suficientes puntos
-  const puntosDisponibles = clienteSeleccionado?.puntos_fidelidad || 0
-  const puedeUsarPuntos = todosCanjeables && puntosDisponibles >= puntosNecesarios && puntosNecesarios > 0
+  const puntosDisponibles = clienteSeleccionado?.puntos_fidelidad || 0;
+  const puedeUsarPuntos =
+    todosCanjeables &&
+    puntosDisponibles >= puntosNecesarios &&
+    puntosNecesarios > 0;
 
   // Reset cuando se abre/cierra el modal
   useEffect(() => {
     if (isOpen) {
-      setSelectedCliente("")
-      setMetodoPago("efectivo")
+      setSelectedCliente("");
+      setMetodoPago("efectivo");
     }
-  }, [isOpen])
+  }, [isOpen]);
 
   // Cambiar automáticamente a efectivo si no puede usar puntos
   useEffect(() => {
     if (metodoPago === "puntos_recompensa" && !puedeUsarPuntos) {
-      setMetodoPago("efectivo")
+      setMetodoPago("efectivo");
     }
-  }, [metodoPago, puedeUsarPuntos])
+  }, [metodoPago, puedeUsarPuntos]);
 
   const handleProcessSale = async () => {
     if (!selectedCliente) {
-      toast.error("Por favor selecciona un cliente")
-      return
+      toast.error("Por favor selecciona un cliente");
+      return;
     }
 
     if (metodoPago === "puntos_recompensa" && !puedeUsarPuntos) {
-      toast.error("No se puede procesar el canje por puntos")
-      return
+      toast.error("No se puede procesar el canje por puntos");
+      return;
     }
 
     console.log("🛒 CheckoutModal - Datos antes de enviar:", {
@@ -119,32 +141,32 @@ export default function CheckoutModal({
       impuesto,
       total,
       cartItems: cartItems.length,
-    })
+    });
 
     const orderTotals =
       metodoPago === "puntos_recompensa"
         ? { subtotal: 0, impuestos: 0, total: 0 }
-        : { subtotal: subtotal, impuestos: impuesto, total: total }
+        : { subtotal: subtotal, impuestos: impuesto, total: total };
 
-    console.log("📊 CheckoutModal - Totales calculados:", orderTotals)
+    console.log("📊 CheckoutModal - Totales calculados:", orderTotals);
 
-    await onProcessSale(selectedCliente, metodoPago, orderTotals, cartItems)
-  }
+    await onProcessSale(selectedCliente, metodoPago, orderTotals, cartItems);
+  };
 
   const getPaymentIcon = (method: string) => {
     switch (method) {
       case "efectivo":
-        return <Banknote className="h-4 w-4" />
+        return <Banknote className="h-4 w-4" />;
       case "tarjeta_credito":
-        return <CreditCard className="h-4 w-4" />
+        return <CreditCard className="h-4 w-4" />;
       case "tarjeta_debito":
-        return <CreditCard className="h-4 w-4" />
+        return <CreditCard className="h-4 w-4" />;
       case "puntos":
-        return <Coins className="h-4 w-4" />
+        return <Coins className="h-4 w-4" />;
       default:
-        return null
+        return null;
     }
-  }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -161,7 +183,10 @@ export default function CheckoutModal({
             {/* Selección de Cliente */}
             <div className="space-y-2">
               <Label htmlFor="cliente">Cliente *</Label>
-              <Select value={selectedCliente} onValueChange={setSelectedCliente}>
+              <Select
+                value={selectedCliente}
+                onValueChange={setSelectedCliente}
+              >
                 <SelectTrigger className="border-amber-200">
                   <SelectValue placeholder="Seleccionar cliente" />
                 </SelectTrigger>
@@ -190,7 +215,10 @@ export default function CheckoutModal({
             {/* Método de Pago */}
             <div className="space-y-3">
               <Label>Método de Pago</Label>
-              <RadioGroup value={metodoPago} onValueChange={(value: any) => setMetodoPago(value)}>
+              <RadioGroup
+                value={metodoPago}
+                onValueChange={(value: any) => setMetodoPago(value)}
+              >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="efectivo" id="efectivo" />
                   <Label htmlFor="efectivo" className="flex items-center gap-2">
@@ -199,29 +227,48 @@ export default function CheckoutModal({
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="tarjeta_credito" id="tarjeta_credito" />
-                  <Label htmlFor="tarjeta_credito" className="flex items-center gap-2">
+                  <RadioGroupItem
+                    value="tarjeta_credito"
+                    id="tarjeta_credito"
+                  />
+                  <Label
+                    htmlFor="tarjeta_credito"
+                    className="flex items-center gap-2"
+                  >
                     {getPaymentIcon("tarjeta_credito")}
                     Tarjeta de Crédito
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="tarjeta_debito" id="tarjeta_debito" />
-                  <Label htmlFor="tarjeta_debito" className="flex items-center gap-2">
+                  <Label
+                    htmlFor="tarjeta_debito"
+                    className="flex items-center gap-2"
+                  >
                     {getPaymentIcon("tarjeta_debito")}
                     Tarjeta de Débito
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="puntos_recompensa" id="puntos_recompensa" disabled={!puedeUsarPuntos} />
+                  <RadioGroupItem
+                    value="puntos_recompensa"
+                    id="puntos_recompensa"
+                    disabled={!puedeUsarPuntos}
+                  />
                   <Label
                     htmlFor="puntos_recompensa"
-                    className={`flex items-center gap-2 ${!puedeUsarPuntos ? "opacity-50" : ""}`}
+                    className={`flex items-center gap-2 ${
+                      !puedeUsarPuntos ? "opacity-50" : ""
+                    }`}
                   >
                     {getPaymentIcon("Puntos")}
                     Canje por Puntos
                     {puntosNecesarios > 0 && (
-                      <Badge variant={puedeUsarPuntos ? "default" : "destructive"}>{puntosNecesarios} pts</Badge>
+                      <Badge
+                        variant={puedeUsarPuntos ? "default" : "destructive"}
+                      >
+                        {puntosNecesarios} pts
+                      </Badge>
                     )}
                   </Label>
                 </div>
@@ -234,21 +281,33 @@ export default function CheckoutModal({
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="font-medium">Puntos necesarios:</span>
-                        <span className="font-bold text-amber-700">{puntosNecesarios}</span>
+                        <span className="font-bold text-amber-700">
+                          {puntosNecesarios}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span>Puntos disponibles:</span>
-                        <span className={puntosDisponibles >= puntosNecesarios ? "text-green-600" : "text-red-600"}>
+                        <span
+                          className={
+                            puntosDisponibles >= puntosNecesarios
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }
+                        >
                           {puntosDisponibles}
                         </span>
                       </div>
                       {puntosDisponibles >= puntosNecesarios ? (
                         <div className="flex justify-between items-center text-green-600">
                           <span>Puntos restantes:</span>
-                          <span className="font-bold">{puntosDisponibles - puntosNecesarios}</span>
+                          <span className="font-bold">
+                            {puntosDisponibles - puntosNecesarios}
+                          </span>
                         </div>
                       ) : (
-                        <div className="text-red-600 text-sm">Puntos insuficientes para el canje</div>
+                        <div className="text-red-600 text-sm">
+                          Puntos insuficientes para el canje
+                        </div>
                       )}
                     </div>
                   </CardContent>
@@ -269,7 +328,9 @@ export default function CheckoutModal({
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Tipo de transacción:</span>
-                    <span className="font-bold text-amber-700">Canje por Puntos</span>
+                    <span className="font-bold text-amber-700">
+                      Canje por Puntos
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Puntos a descontar:</span>
@@ -312,12 +373,20 @@ export default function CheckoutModal({
           <Button
             className="bg-amber-700 hover:bg-amber-800"
             onClick={handleProcessSale}
-            disabled={isProcessing || !selectedCliente || (metodoPago === "puntos_recompensa" && !puedeUsarPuntos)}
+            disabled={
+              isProcessing ||
+              !selectedCliente ||
+              (metodoPago === "puntos_recompensa" && !puedeUsarPuntos)
+            }
           >
-            {isProcessing ? "Procesando..." : metodoPago === "puntos_recompensa" ? "Procesar Canje" : "Procesar Venta"}
+            {isProcessing
+              ? "Procesando..."
+              : metodoPago === "puntos_recompensa"
+              ? "Procesar Canje"
+              : "Procesar Venta"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
